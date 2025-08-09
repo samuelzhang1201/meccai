@@ -1,0 +1,17 @@
+# Production environment overrides
+app:
+  debug: false
+
+models:
+  openai:
+    temperature: 0.0
+    max_tokens: 2048
+
+# Production memory settings
+memory:
+  enabled: true
+  persist_directory: "/data/chroma"
+
+# Production telemetry
+telemetry:
+  enabled: true

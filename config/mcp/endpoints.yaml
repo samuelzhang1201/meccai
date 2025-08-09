@@ -1,0 +1,19 @@
+# Optional: Additional MCP endpoints/services
+endpoints:
+  # HTTP-based MCP servers
+  remote_tools:
+    url: "https://api.example.com/mcp"
+    headers:
+      Authorization: "Bearer ${REMOTE_API_KEY}"
+    timeout: 30
+    
+  # Local development servers
+  local_dev:
+    url: "http://localhost:3001/mcp"
+    timeout: 10
+
+# Service discovery
+discovery:
+  enabled: false
+  registry_url: "https://mcp-registry.example.com"
+  refresh_interval: 300  # 5 minutes

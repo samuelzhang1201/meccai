@@ -1,0 +1,22 @@
+1. create an agent called lumos_ai_manager;
+2. this ai is using openai sdk framework, using my openai key, and model is gpt-5
+3. create multiple tools under the tools folder.
+4. Create tableau tools with tableau rest api, see doc here: https://help.tableau.com/current/api/rest_api/en-us/REST/rest_api.htm
+5. current tableau rest api version is 3.25, use this version, when build the tool function, need to consider the pagenation.
+6. my tableau token name is Agent
+please find a safe place to store it (use environment variables). and for tableau tool, when call the tool, need to auto signin and sign off when finished calling
+see https://help.tableau.com/current/api/rest_api/en-us/REST/rest_api_ref_authentication.htm#sign_in
+and https://help.tableau.com/current/api/rest_api/en-us/REST/rest_api_ref_authentication.htm#sign_out
+my table_server_url is 'https://prod-apsoutheast-a.online.tableau.com'
+tableau_site_content_url is 'meccalumos'
+7. build following tools:
+    1. list_all_pats: I want to show all PATs in the site meccalumos
+    reference: https://help.tableau.com/current/api/rest_api/en-us/REST/rest_api_ref_authentication.htm#list_personal_access_tokens
+    2. get_view: https://help.tableau.com/current/api/rest_api/en-us/REST/rest_api_ref_workbooks_and_views.htm#get_view
+    3. query_view_pdf: https://help.tableau.com/current/api/rest_api/en-us/REST/rest_api_ref_workbooks_and_views.htm#query_view_pdf
+8. Multiple Agents:
+    1. agent1 is tableau_analyst with tableau tools
+    2. agent2 is dbt_build with dbt-mcp tools
+    3. agent3 is reporting_analyst, an experienced data analyst, analyze data 
+    4. agent4 is lumos_ai_manager, generating reports and send emails, with zapier-mcp tools
+

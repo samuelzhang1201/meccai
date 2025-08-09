@@ -1,0 +1,43 @@
+# Structured logging configuration
+version: 1
+disable_existing_loggers: false
+
+formatters:
+  json:
+    format: "{\"timestamp\": \"%(asctime)s\", \"level\": \"%(levelname)s\", \"logger\": \"%(name)s\", \"message\": \"%(message)s\"}"
+    datefmt: "%Y-%m-%dT%H:%M:%S"
+  
+  console:
+    format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    datefmt: "%H:%M:%S"
+
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: INFO
+    formatter: console
+    stream: ext://sys.stdout
+  
+  file:
+    class: logging.handlers.RotatingFileHandler
+    level: DEBUG
+    formatter: json
+    filename: logs/meccaai.log
+    maxBytes: 10485760  # 10MB
+    backupCount: 5
+    encoding: utf8
+
+loggers:
+  meccaai:
+    level: DEBUG
+    handlers: [console, file]
+    propagate: false
+  
+  httpx:
+    level: WARNING
+    handlers: [console]
+    propagate: false
+
+root:
+  level: INFO
+  handlers: [console]

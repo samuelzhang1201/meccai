@@ -1,0 +1,18 @@
+# Development environment overrides
+app:
+  debug: true
+
+models:
+  openai:
+    temperature: 0.2
+  anthropic:
+    temperature: 0.2
+
+# Enable telemetry in dev for testing
+telemetry:
+  enabled: true
+  traces_endpoint: "http://localhost:4317"
+
+# Enable memory for development
+memory:
+  enabled: true
