@@ -36,9 +36,11 @@ class TableauAuthManager:
             )
 
         signin_url = urljoin(self.server_url, f"/api/{self.api_version}/auth/signin")
-        
+
         logger.info(f"Signing in to Tableau Server: {signin_url}")
-        logger.debug(f"Using token name: {self.token_name}, site: {self.site_content_url}")
+        logger.debug(
+            f"Using token name: {self.token_name}, site: {self.site_content_url}"
+        )
 
         # Use XML format as required by Tableau REST API
         signin_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
@@ -56,50 +58,56 @@ class TableauAuthManager:
                     headers={"Content-Type": "application/xml"},
                 )
                 response.raise_for_status()
-                
+
                 # Parse XML response
                 root = ET.fromstring(response.text)
                 logger.debug(f"XML Response: {response.text[:200]}...")
-                
+
                 # Define namespace for Tableau API
                 ns = {"ts": "http://tableau.com/api"}
-                
+
                 # Find credentials element with correct namespace
                 credentials = root.find("ts:credentials", ns)
                 if credentials is None:
                     logger.error(f"Could not find credentials in XML: {response.text}")
                     raise ValueError("Could not find credentials in response")
-                
+
                 # Get session token from credentials attributes
                 self.session_token = credentials.get("token")
-                logger.debug(f"Session token: {self.session_token[:10] if self.session_token else None}...")
-                
+                logger.debug(
+                    f"Session token: {self.session_token[:10] if self.session_token else None}..."
+                )
+
                 # Find site and user elements as children of credentials
                 site = credentials.find("ts:site", ns)
                 user = credentials.find("ts:user", ns)
-                
+
                 if site is not None:
                     self.site_id = site.get("id")
                     logger.debug(f"Site ID: {self.site_id}")
                 else:
                     logger.error("Site element not found in credentials")
-                    
+
                 if user is not None:
                     self.user_id = user.get("id")
                     logger.debug(f"User ID: {self.user_id}")
                 else:
                     logger.warning("User element not found in credentials")
                     # If user ID is not in sign-in response, we'll get it separately
-                
+
                 logger.info("Successfully signed in to Tableau Server")
                 return {
                     "token": self.session_token,
                     "site_id": self.site_id,
-                    "user_id": self.user_id
+                    "user_id": self.user_id,
                 }
         except httpx.HTTPStatusError as e:
-            logger.error(f"Tableau authentication failed: {e.response.status_code} - {e.response.text}")
-            raise ValueError(f"Tableau authentication failed: {e.response.status_code}. Check your token and site settings.")
+            logger.error(
+                f"Tableau authentication failed: {e.response.status_code} - {e.response.text}"
+            )
+            raise ValueError(
+                f"Tableau authentication failed: {e.response.status_code}. Check your token and site settings."
+            )
 
     async def sign_out(self) -> bool:
         """Sign out from Tableau Server."""
@@ -143,41 +151,40 @@ class TableauAuthManager:
         """Get the current user's ID."""
         if not self.session_token or not self.site_id:
             return None
-            
+
         # Get current user via "users/current" endpoint
         current_user_url = urljoin(
             self.server_url,
-            f"/api/{self.api_version}/sites/{self.site_id}/users/current"
+            f"/api/{self.api_version}/sites/{self.site_id}/users/current",
         )
-        
+
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.get(
-                    current_user_url,
-                    headers=self.get_auth_headers()
+                    current_user_url, headers=self.get_auth_headers()
                 )
                 response.raise_for_status()
-                
+
                 # Parse XML response
                 root = ET.fromstring(response.text)
                 ns = {"ts": "http://tableau.com/api"}
                 user = root.find(".//ts:user", ns) or root.find(".//user")
-                
+
                 if user is not None:
                     user_id = user.get("id")
                     logger.debug(f"Retrieved current user ID: {user_id}")
                     return user_id
-                    
+
         except Exception as e:
             logger.error(f"Error getting current user: {e}")
-            
+
         return None
 
 
 @tool("list_all_pats")
 async def list_all_personal_access_tokens() -> ToolResult:
     """List Personal Access Tokens (PATs) for the current user in the Tableau site.
-    
+
     Note: This returns PATs for the authenticated user, not all users in the site.
     Only server administrators can list PATs for all users.
 
@@ -194,7 +201,7 @@ async def list_all_personal_access_tokens() -> ToolResult:
         if not auth_manager.user_id:
             # Try to get current user ID
             auth_manager.user_id = await auth_manager.get_current_user()
-        
+
         if auth_manager.user_id:
             # Use user-specific endpoint
             url = urljoin(
@@ -223,19 +230,19 @@ async def list_all_personal_access_tokens() -> ToolResult:
                 )
                 response.raise_for_status()
 
-                # Parse XML response 
+                # Parse XML response
                 root = ET.fromstring(response.text)
                 ns = {"ts": "http://tableau.com/api"}
-                
+
                 # Find personalAccessTokens element
                 pats_element = root.find("ts:personalAccessTokens", ns)
                 if pats_element is None:
                     logger.warning("No personalAccessTokens element found in response")
                     break
-                
+
                 # Find all personalAccessToken elements
                 tokens = pats_element.findall("ts:personalAccessToken", ns)
-                
+
                 # Convert XML elements to dictionaries
                 for token in tokens:
                     token_data = {}

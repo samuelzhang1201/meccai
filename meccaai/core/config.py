@@ -38,7 +38,9 @@ class ModelsConfig(BaseModel):
     """Multi-provider model configuration."""
 
     default_provider: str = "openai"
-    openai: ModelConfig = Field(default_factory=lambda: ModelConfig(model="gpt-4o-mini"))
+    openai: ModelConfig = Field(
+        default_factory=lambda: ModelConfig(model="gpt-4o-mini")
+    )
     anthropic: ModelConfig = Field(
         default_factory=lambda: ModelConfig(model="claude-3-sonnet-20240229")
     )

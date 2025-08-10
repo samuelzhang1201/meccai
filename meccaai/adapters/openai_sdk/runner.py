@@ -75,7 +75,7 @@ class OpenAIRunner:
                             content = str(result.result)
                     else:
                         content = result.error or "Tool execution failed"
-                    
+
                     openai_messages.append(
                         {
                             "role": "tool",

@@ -1,6 +1,5 @@
 """Multi-agent system for LumosAI with specialized agents."""
 
-
 from meccaai.adapters.openai_sdk.runner import OpenAIRunner
 from meccaai.core.logging import get_logger
 from meccaai.core.tool_registry import get_registry
@@ -13,7 +12,11 @@ class LumosAgent:
     """Base class for specialized agents in the Lumos system."""
 
     def __init__(
-        self, name: str, role: str, tools: list[str] | None = None, model: str = "gpt-4o-mini"
+        self,
+        name: str,
+        role: str,
+        tools: list[str] | None = None,
+        model: str = "gpt-4o-mini",
     ):
         self.name = name
         self.role = role
@@ -88,6 +91,21 @@ class ReportingAnalyst(LumosAgent):
         )
 
 
+class SecurityAnalyst(LumosAgent):
+    """Specialized agent for security analysis and prompt scanning."""
+
+    def __init__(self):
+        super().__init__(
+            name="Security Analyst",
+            role="a cybersecurity specialist who analyzes user requests for potential "
+            "security risks, scans prompts for sensitive data requests, and ensures "
+            "data protection compliance. I help identify and prevent unauthorized "
+            "access to sensitive information like PII, financial data, and proprietary content.",
+            tools=["prompt_scanner"],
+            model="gpt-4o-mini",
+        )
+
+
 class LumosAIManager(LumosAgent):
     """Main orchestrating agent that coordinates other agents and handles workflows."""
 
@@ -103,6 +121,7 @@ class LumosAIManager(LumosAgent):
                 "create_slack_message",
                 "create_google_sheet_row",
                 "trigger_webhook",
+                "self_intro",
             ],
             model="gpt-4o-mini",
         )
@@ -111,6 +130,7 @@ class LumosAIManager(LumosAgent):
         self.tableau_analyst = TableauAnalyst()
         self.dbt_build = DBTBuildAgent()
         self.reporting_analyst = ReportingAnalyst()
+        self.security_analyst = SecurityAnalyst()
 
     async def delegate_to_agent(
         self, agent_name: str, messages: list[Message]
@@ -120,6 +140,7 @@ class LumosAIManager(LumosAgent):
             "tableau": self.tableau_analyst,
             "dbt": self.dbt_build,
             "reporting": self.reporting_analyst,
+            "security": self.security_analyst,
         }
 
         agent = agent_map.get(agent_name.lower())
@@ -178,6 +199,7 @@ class LumosAgentSystem:
             "tableau": self.manager.tableau_analyst,
             "dbt": self.manager.dbt_build,
             "reporting": self.manager.reporting_analyst,
+            "security": self.manager.security_analyst,
         }
 
     async def process_request(

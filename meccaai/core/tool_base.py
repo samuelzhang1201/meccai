@@ -110,11 +110,12 @@ def tool(name: str | None = None, description: str | None = None):
             description=tool_description,
             func=func,
         )
-        
+
         # Auto-register the tool
         from meccaai.core.tool_registry import get_registry
+
         get_registry().register(tool_instance)
-        
+
         return tool_instance
 
     return decorator

@@ -11,10 +11,18 @@ from meccaai.core.types import Message
 logger = get_logger(__name__)
 
 
-@click.group()
-def cli():
+@click.group(invoke_without_command=True)
+@click.option("--chat", is_flag=True, help="Start interactive chat mode")
+@click.pass_context
+def cli(ctx, chat):
     """Lumos AI Multi-Agent System."""
-    pass
+    if chat:
+        # Start interactive chat mode
+        asyncio.run(_interactive_chat())
+        ctx.exit()
+    elif ctx.invoked_subcommand is None:
+        # Show help if no command and no --chat flag
+        click.echo(ctx.get_help())
 
 
 @cli.command()
@@ -165,6 +173,100 @@ async def _tableau_pdf(view_id: str, filter_params: dict | None):
     except Exception as e:
         logger.error(f"Error exporting Tableau PDF: {e}")
         click.echo(f"Error: {str(e)}")
+
+
+async def _interactive_chat():
+    """Interactive chat session."""
+    system = LumosAgentSystem()
+
+    click.echo("🤖 Welcome to Lumos AI Interactive Chat!")
+    click.echo("Available agents: manager, tableau, dbt, reporting, security")
+    click.echo("Type 'help' for commands, 'quit' or 'exit' to end the session.\n")
+
+    current_agent = None
+
+    while True:
+        try:
+            # Get user input
+            if current_agent:
+                prompt = f"[{current_agent}] > "
+            else:
+                prompt = "lumos > "
+
+            user_input = click.prompt(prompt, type=str).strip()
+
+            if not user_input:
+                continue
+
+            # Handle special commands
+            if user_input.lower() in ["quit", "exit", "q"]:
+                click.echo("👋 Goodbye!")
+                break
+            elif user_input.lower() == "help":
+                _show_help()
+                continue
+            elif user_input.startswith("/agent "):
+                agent_name = user_input[7:].strip()
+                if agent_name in system.agents:
+                    current_agent = agent_name
+                    click.echo(f"✅ Switched to {agent_name} agent")
+                else:
+                    click.echo(f"❌ Unknown agent: {agent_name}")
+                    click.echo("Available agents: " + ", ".join(system.agents.keys()))
+                continue
+            elif user_input == "/reset":
+                current_agent = None
+                click.echo("✅ Reset to default agent")
+                continue
+            elif user_input == "/workflow":
+                # Next message will use workflow mode
+                user_input = click.prompt("Enter workflow message: ", type=str).strip()
+                if user_input:
+                    messages = [Message(role="user", content=user_input)]
+                    result = await system.process_request(messages, workflow=True)
+                    _display_result(result)
+                continue
+
+            # Process regular chat message
+            messages = [Message(role="user", content=user_input)]
+            result = await system.process_request(messages, agent=current_agent)
+            _display_result(result)
+
+        except KeyboardInterrupt:
+            click.echo("\n👋 Goodbye!")
+            break
+        except EOFError:
+            click.echo("\n👋 Goodbye!")
+            break
+        except Exception as e:
+            logger.error(f"Error in interactive chat: {e}")
+            click.echo(f"❌ Error: {str(e)}")
+
+
+def _show_help():
+    """Show help information for interactive chat."""
+    click.echo("\n📋 Interactive Chat Commands:")
+    click.echo(
+        "  /agent <name>  - Switch to specific agent (manager, tableau, dbt, reporting, security)"
+    )
+    click.echo("  /reset         - Reset to default agent")
+    click.echo("  /workflow      - Use workflow mode for next message")
+    click.echo("  help          - Show this help")
+    click.echo("  quit/exit/q   - End chat session")
+    click.echo("\n💬 Just type your message to chat with the current agent!")
+    click.echo()
+
+
+def _display_result(result):
+    """Display chat result."""
+    if isinstance(result, Message):
+        click.echo(f"🤖 {result.content}")
+    elif isinstance(result, list):
+        for i, msg in enumerate(result, 1):
+            click.echo(f"🤖 Agent {i}: {msg.content}")
+            if i < len(result):
+                click.echo("-" * 50)
+    click.echo()
 
 
 def main():
