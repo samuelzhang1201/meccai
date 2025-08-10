@@ -184,6 +184,14 @@ def load_mcp_servers_config(config_path: str) -> list[MCPServer]:
         mcp_servers = config.get("mcpServers", {})
 
         for name, server_config in mcp_servers.items():
+            # Skip URL-based servers (like Zapier) - only handle command-based servers
+            if "url" in server_config:
+                continue
+                
+            if "command" not in server_config:
+                logger.warning(f"Skipping server {name}: missing 'command' field")
+                continue
+                
             server = MCPServer(
                 name=name,
                 command=server_config["command"],

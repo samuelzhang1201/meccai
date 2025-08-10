@@ -1,110 +1,30 @@
-"""Zapier integration tools via MCP for workflow automation."""
+"""Zapier integration tools via MCP.
 
-from typing import Any
+This module provides access to Zapier's MCP server which dynamically exposes
+tools based on user's configured Zapier automations. The actual tools available
+depend on what apps and actions the user has set up in their Zapier account.
 
-from meccaai.core.tool_base import tool
-from meccaai.core.types import ToolResult
+Note: Zapier MCP is a URL-based server that provides access to 7,000+ apps
+and 30,000+ actions. Tools are dynamically generated based on user configuration.
+"""
 
+from meccaai.core.mcp_tool_base import mcp_tool
 
-@tool("send_email")
-async def send_email(
-    to: str, subject: str, body: str, from_email: str | None = None
-) -> ToolResult:
-    """Send an email via Zapier automation.
+# Zapier MCP server provides dynamic tools based on user configuration
+# The actual tools available depend on what the user has configured in their Zapier account
+# Since tools are dynamic, we cannot pre-define them here
 
-    Args:
-        to: Recipient email address
-        subject: Email subject line
-        body: Email body content
-        from_email: Optional sender email (uses default if not provided)
+# Example tools that might be available (depending on user's Zapier setup):
+# - Gmail: Send Email, Create Draft, etc.
+# - Slack: Send Channel Message, Send Direct Message, etc. 
+# - Google Sheets: Create Row, Update Row, etc.
+# - Webhooks: POST Request, etc.
+# - And thousands more based on connected apps
 
-    Returns:
-        ToolResult: Status of email sending
-    """
-    return ToolResult(
-        success=True,
-        result={
-            "message": "Email sent via Zapier placeholder",
-            "status": "This tool will be implemented when zapier-mcp is configured",
-            "to": to,
-            "subject": subject,
-            "body_length": len(body),
-        },
-    )
+# To use Zapier MCP tools:
+# 1. Configure your Zapier MCP server with the apps you want to use
+# 2. The tools will be automatically available through the MCP protocol
+# 3. Tools are accessed via the URL: https://mcp.zapier.com/api/mcp/s/[your-server-id]/mcp
 
-
-@tool("create_slack_message")
-async def create_slack_message(
-    channel: str, message: str, username: str | None = None
-) -> ToolResult:
-    """Send a message to Slack via Zapier.
-
-    Args:
-        channel: Slack channel name (with or without #)
-        message: Message content
-        username: Optional username to post as
-
-    Returns:
-        ToolResult: Status of Slack message
-    """
-    return ToolResult(
-        success=True,
-        result={
-            "message": "Slack message sent via Zapier placeholder",
-            "status": "This tool will be implemented when zapier-mcp is configured",
-            "channel": channel,
-            "message_length": len(message),
-        },
-    )
-
-
-@tool("create_google_sheet_row")
-async def create_google_sheet_row(
-    spreadsheet_id: str, sheet_name: str, values: dict[str, Any]
-) -> ToolResult:
-    """Add a row to a Google Sheet via Zapier.
-
-    Args:
-        spreadsheet_id: Google Sheets document ID
-        sheet_name: Name of the sheet tab
-        values: Dictionary of column names to values
-
-    Returns:
-        ToolResult: Status of row creation
-    """
-    return ToolResult(
-        success=True,
-        result={
-            "message": "Google Sheet row created via Zapier placeholder",
-            "status": "This tool will be implemented when zapier-mcp is configured",
-            "spreadsheet_id": spreadsheet_id,
-            "sheet_name": sheet_name,
-            "columns": list(values.keys()),
-        },
-    )
-
-
-@tool("trigger_webhook")
-async def trigger_webhook(
-    webhook_url: str, payload: dict[str, Any], method: str = "POST"
-) -> ToolResult:
-    """Trigger a webhook via Zapier automation.
-
-    Args:
-        webhook_url: URL of the webhook to trigger
-        payload: Data to send in the webhook
-        method: HTTP method (POST, GET, PUT, etc.)
-
-    Returns:
-        ToolResult: Status of webhook trigger
-    """
-    return ToolResult(
-        success=True,
-        result={
-            "message": "Webhook triggered via Zapier placeholder",
-            "status": "This tool will be implemented when zapier-mcp is configured",
-            "webhook_url": webhook_url,
-            "method": method,
-            "payload_keys": list(payload.keys()),
-        },
-    )
+# Since Zapier tools are dynamic and user-specific, no static tools are defined here.
+# The MCP client will discover available tools at runtime from the Zapier server.

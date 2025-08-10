@@ -70,9 +70,35 @@ class DBTBuildAgent(LumosAgent):
         super().__init__(
             name="DBT Build Agent",
             role="a data engineering specialist who helps with dbt model building, "
-            "testing, and deployment. I can help you run dbt commands, "
-            "manage data transformations, and ensure data quality.",
-            tools=["dbt_run", "dbt_test", "dbt_docs_generate"],
+            "testing, deployment, and semantic layer operations. I can help you run dbt commands, "
+            "manage data transformations, query metrics, explore models, generate SQL from natural language, "
+            "and ensure data quality across your entire data stack.",
+            tools=[
+                # dbt CLI tools (ONLY tools that exist in dbt-mcp server)
+                "build",
+                "compile", 
+                "docs",
+                "list",
+                "parse",
+                "run",
+                "test",
+                "show",
+                # Semantic Layer tools  
+                "list_metrics",
+                "get_dimensions",
+                "get_entities",
+                "query_metrics",
+                "get_metrics_compiled_sql",
+                # Discovery tools
+                "get_mart_models",
+                "get_all_models",
+                "get_model_details",
+                "get_model_parents",
+                "get_model_children",
+                # SQL tools
+                "text_to_sql",
+                "execute_sql",
+            ],
             model="gpt-4o-mini",
         )
 
@@ -106,6 +132,46 @@ class SecurityAnalyst(LumosAgent):
         )
 
 
+class CortexAgent(LumosAgent):
+    """Specialized agent for Snowflake Cortex AI operations."""
+
+    def __init__(self):
+        super().__init__(
+            name="Cortex AI Agent",
+            role="a Snowflake Cortex specialist who runs Cortex Agents to interact with "
+            "your Snowflake data and AI capabilities. I can help you query data, generate insights, "
+            "and leverage Snowflake's built-in AI and ML functions through Cortex Agents.",
+            tools=[
+                # ONLY actual cortex-agent MCP server tool
+                "run_cortex_agents",
+            ],
+            model="gpt-4o-mini",
+        )
+
+
+class AtlassianAgent(LumosAgent):
+    """Specialized agent for Atlassian Jira and Confluence operations."""
+
+    def __init__(self):
+        super().__init__(
+            name="Atlassian Agent",
+            role="a Jira specialist who helps with issue tracking and project management. "
+            "I can help you search issues, create and update tickets, manage epics, "
+            "add comments and attachments, and handle Jira workflows efficiently.",
+            tools=[
+                # ONLY actual Jira MCP server tools
+                "search_issues",
+                "get_epic_children", 
+                "get_issue",
+                "create_issue",
+                "update_issue",
+                "add_attachment",
+                "add_comment",
+            ],
+            model="gpt-4o-mini",
+        )
+
+
 class LumosAIManager(LumosAgent):
     """Main orchestrating agent that coordinates other agents and handles workflows."""
 
@@ -117,11 +183,10 @@ class LumosAIManager(LumosAgent):
             "I can delegate tasks to other agents and combine their outputs into "
             "cohesive deliverables.",
             tools=[
-                "send_email",
-                "create_slack_message",
-                "create_google_sheet_row",
-                "trigger_webhook",
+                # Core coordination tools
                 "self_intro",
+                # Note: Zapier MCP tools are dynamic and discovered at runtime
+                # based on user's Zapier configuration
             ],
             model="gpt-4o-mini",
         )
@@ -131,6 +196,8 @@ class LumosAIManager(LumosAgent):
         self.dbt_build = DBTBuildAgent()
         self.reporting_analyst = ReportingAnalyst()
         self.security_analyst = SecurityAnalyst()
+        self.cortex_agent = CortexAgent()
+        self.atlassian_agent = AtlassianAgent()
 
     async def delegate_to_agent(
         self, agent_name: str, messages: list[Message]
@@ -141,6 +208,8 @@ class LumosAIManager(LumosAgent):
             "dbt": self.dbt_build,
             "reporting": self.reporting_analyst,
             "security": self.security_analyst,
+            "cortex": self.cortex_agent,
+            "atlassian": self.atlassian_agent,
         }
 
         agent = agent_map.get(agent_name.lower())
@@ -200,6 +269,8 @@ class LumosAgentSystem:
             "dbt": self.manager.dbt_build,
             "reporting": self.manager.reporting_analyst,
             "security": self.manager.security_analyst,
+            "cortex": self.manager.cortex_agent,
+            "atlassian": self.manager.atlassian_agent,
         }
 
     async def process_request(
