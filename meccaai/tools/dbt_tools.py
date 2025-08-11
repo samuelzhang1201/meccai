@@ -5,11 +5,13 @@ All tools connect to the actual dbt-mcp server for real dbt operations.
 """
 
 from meccaai.core.mcp_tool_base import mcp_tool
+from meccaai.prompts.loader import get_tool_description
 
 # ONLY actual dbt-mcp server tools (verified from dbt-labs/dbt-mcp repository)
 
 
 # dbt CLI Tools (8 tools)
+
 
 @mcp_tool(name="build", server_name="dbt-mcp")
 def build(models: str | None = None, select: str | None = None):
@@ -74,12 +76,14 @@ def parse():
 
 
 @mcp_tool(name="run", server_name="dbt-mcp")
-def run(models: str | None = None, select: str | None = None, exclude: str | None = None):
+def run(
+    models: str | None = None, select: str | None = None, exclude: str | None = None
+):
     """Executes models in the database.
 
     Args:
         models: Specific models to run (comma-separated)
-        select: dbt select syntax for choosing models  
+        select: dbt select syntax for choosing models
         exclude: Models to exclude from the run
 
     Returns:
@@ -118,7 +122,8 @@ def show(select: str, limit: int = 5):
 
 # Semantic Layer Tools (5 tools)
 
-@mcp_tool(name="list_metrics", server_name="dbt-mcp")
+
+@mcp_tool(name="list_metrics", server_name="dbt-mcp", description=get_tool_description("semantic_layer/list_metrics.md"))
 def list_metrics():
     """Retrieves all defined metrics.
 
@@ -128,7 +133,7 @@ def list_metrics():
     pass  # Implementation handled by MCP decorator
 
 
-@mcp_tool(name="get_dimensions", server_name="dbt-mcp")
+@mcp_tool(name="get_dimensions", server_name="dbt-mcp", description=get_tool_description("semantic_layer/get_dimensions.md"))
 def get_dimensions(metrics: list[str]):
     """Gets dimensions for specified metrics.
 
@@ -141,7 +146,7 @@ def get_dimensions(metrics: list[str]):
     pass  # Implementation handled by MCP decorator
 
 
-@mcp_tool(name="get_entities", server_name="dbt-mcp")
+@mcp_tool(name="get_entities", server_name="dbt-mcp", description=get_tool_description("semantic_layer/get_entities.md"))
 def get_entities(metrics: list[str]):
     """Gets entities for specified metrics.
 
@@ -154,21 +159,73 @@ def get_entities(metrics: list[str]):
     pass  # Implementation handled by MCP decorator
 
 
-@mcp_tool(name="query_metrics", server_name="dbt-mcp")
+# Define the correct JSON schema for query_metrics parameters
+QUERY_METRICS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "metrics": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "List of metric names to query"
+        },
+        "group_by": {
+            "type": "array", 
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "type": {"type": "string"}, 
+                    "grain": {"type": ["string", "null"]}
+                },
+                "required": ["name", "type"]
+            },
+            "description": "List of dimensions/entities to group results by"
+        },
+        "order_by": {
+            "type": "array",
+            "items": {
+                "type": "object", 
+                "properties": {
+                    "name": {"type": "string"},
+                    "desc": {"type": "boolean"},
+                    "descending": {"type": "boolean"}
+                },
+                "required": ["name"]
+            },
+            "description": "List of ordering specifications for results"
+        },
+        "where": {
+            "type": "string",
+            "description": "SQL WHERE clause with dimension/entity references"
+        },
+        "limit": {
+            "type": "integer",
+            "description": "Maximum number of rows to return"
+        }
+    },
+    "required": ["metrics"]
+}
+
+@mcp_tool(
+    name="query_metrics", 
+    server_name="dbt-mcp", 
+    description=get_tool_description("semantic_layer/query_metrics.md"),
+    parameters_schema=QUERY_METRICS_SCHEMA
+)
 def query_metrics(
     metrics: list[str],
-    group_by: list[str] | None = None,
-    order_by: list[str] | None = None,
-    where: list[str] | None = None,
+    group_by: list[dict] | None = None,  # Fixed: list of objects, not strings
+    order_by: list[dict] | None = None,  # Fixed: list of objects, not strings  
+    where: str | None = None,            # Fixed: string, not list
     limit: int | None = None,
 ):
     """Queries metrics with grouping, ordering, filtering, and limiting.
 
     Args:
         metrics: List of metric names to query
-        group_by: Dimensions to group results by
-        order_by: Ordering specifications for results
-        where: Filter conditions to apply
+        group_by: List of dimension/entity objects with name, type, grain
+        order_by: List of ordering objects with name, desc/descending
+        where: SQL WHERE clause string with dimension/entity references
         limit: Maximum number of rows to return
 
     Returns:
@@ -176,22 +233,25 @@ def query_metrics(
     """
     pass  # Implementation handled by MCP decorator
 
-
-@mcp_tool(name="get_metrics_compiled_sql", server_name="dbt-mcp")
+@mcp_tool(
+    name="get_metrics_compiled_sql", 
+    server_name="dbt-mcp",
+    parameters_schema=QUERY_METRICS_SCHEMA
+)
 def get_metrics_compiled_sql(
     metrics: list[str],
-    group_by: list[str] | None = None,
-    order_by: list[str] | None = None,
-    where: list[str] | None = None,
+    group_by: list[dict] | None = None,  # Fixed: list of objects, not strings
+    order_by: list[dict] | None = None,  # Fixed: list of objects, not strings
+    where: str | None = None,            # Fixed: string, not list
     limit: int | None = None,
 ):
     """Returns compiled SQL for metrics without executing.
 
     Args:
         metrics: List of metric names to compile SQL for
-        group_by: Dimensions to group results by
-        order_by: Ordering specifications for results
-        where: Filter conditions to apply
+        group_by: List of dimension/entity objects with name, type, grain
+        order_by: List of ordering objects with name, desc/descending  
+        where: SQL WHERE clause string with dimension/entity references
         limit: Maximum number of rows to return
 
     Returns:
@@ -199,8 +259,11 @@ def get_metrics_compiled_sql(
     """
     pass  # Implementation handled by MCP decorator
 
+# Schema is now provided via decorator parameter
+
 
 # Discovery Tools (5 tools)
+
 
 @mcp_tool(name="get_mart_models", server_name="dbt-mcp")
 def get_mart_models():
@@ -262,6 +325,7 @@ def get_model_children(model_name: str):
 
 
 # SQL Tools (2 tools)
+
 
 @mcp_tool(name="text_to_sql", server_name="dbt-mcp")
 def text_to_sql(query_text: str):

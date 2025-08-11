@@ -123,3 +123,21 @@ class MCPEndpoint:
     url: str
     headers: dict[str, str] | None = None
     timeout: int = 30
+
+
+@dataclass
+class AgentDecision:
+    """Agent decision about task completion and handoff."""
+
+    continue_chain: bool  # True = continue to next agent, False = stop here
+    reason: str  # Explanation for the decision
+    confidence: float = 1.0  # 0-1 confidence in the decision
+
+
+@dataclass
+class AgentResponse:
+    """Extended response structure with agent decision."""
+
+    message: Message  # The actual response content
+    decision: AgentDecision  # Whether to continue the handoff chain
+    agent_name: str  # Name of the agent that provided this response

@@ -8,7 +8,6 @@ Note: Zapier MCP is a URL-based server that provides access to 7,000+ apps
 and 30,000+ actions. Tools are dynamically generated based on user configuration.
 """
 
-from meccaai.core.mcp_tool_base import mcp_tool
 
 # Zapier MCP server provides dynamic tools based on user configuration
 # The actual tools available depend on what the user has configured in their Zapier account
@@ -16,7 +15,7 @@ from meccaai.core.mcp_tool_base import mcp_tool
 
 # Example tools that might be available (depending on user's Zapier setup):
 # - Gmail: Send Email, Create Draft, etc.
-# - Slack: Send Channel Message, Send Direct Message, etc. 
+# - Slack: Send Channel Message, Send Direct Message, etc.
 # - Google Sheets: Create Row, Update Row, etc.
 # - Webhooks: POST Request, etc.
 # - And thousands more based on connected apps

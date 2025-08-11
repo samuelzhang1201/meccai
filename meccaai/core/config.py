@@ -54,6 +54,14 @@ class ToolsConfig(BaseModel):
     mcp_enabled: bool = True
 
 
+class AgentsConfig(BaseModel):
+    """Agent configuration."""
+
+    auto_handoff: bool = True
+    security_first_policy: bool = True
+    handoff_confidence_threshold: float = 0.2
+
+
 class MemoryConfig(BaseModel):
     """Memory/vector storage configuration."""
 
@@ -76,7 +84,7 @@ class TableauConfig(BaseModel):
 
     server_url: str = Field(default="https://prod-apsoutheast-a.online.tableau.com")
     site_content_url: str = Field(default="meccalumos")
-    token_name: str = Field(default="Agent")
+    token_name: str = Field(default="agent_api")
     api_version: str = Field(default="3.25")
 
 
@@ -102,6 +110,7 @@ class Settings(BaseSettings):
     mcp: MCPConfig = Field(default_factory=MCPConfig)
     models: ModelsConfig = Field(default_factory=ModelsConfig)
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
+    agents: AgentsConfig = Field(default_factory=AgentsConfig)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
     telemetry: TelemetryConfig = Field(default_factory=TelemetryConfig)
     tableau: TableauConfig = Field(default_factory=TableauConfig)

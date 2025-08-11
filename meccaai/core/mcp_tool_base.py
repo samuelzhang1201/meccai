@@ -36,35 +36,49 @@ class MCPTool(BaseTool):
         """Get or create MCP client."""
         if self._mcp_client is None:
             self._mcp_client = MCPClient()
-            
-            # Load and start servers
-            servers = load_mcp_servers_config("config/mcp/cursor.mcp.json")
+
+            # Load and start servers using settings config path
+            from meccaai.core.config import get_settings
+            import os
+            from pathlib import Path
+
+            settings = get_settings()
+
+            # Handle both relative and absolute paths
+            config_path = settings.mcp.config_path
+            if not os.path.isabs(config_path):
+                # Find project root (directory containing pyproject.toml)
+                project_root = Path(__file__).parent.parent.parent
+                config_path = project_root / config_path
+
+            config_path = str(config_path)
+            servers = load_mcp_servers_config(config_path)
             for server in servers:
                 if server.name == self.server_name:
                     await self._mcp_client.start_server(server)
                     break
             else:
                 raise ValueError(f"MCP server '{self.server_name}' not found in config")
-                
+
         return self._mcp_client
 
     async def call(self, **kwargs: Any) -> ToolResult:
         """Execute the tool via MCP server."""
         try:
             client = await self._get_mcp_client()
-            
+
             # Call the MCP tool
             result = await client.call_tool(
                 server_name=self.server_name,
                 tool_name=self.mcp_tool_name,
-                arguments=kwargs
+                arguments=kwargs,
             )
-            
+
             return ToolResult(
                 success=True,
                 result=result,
             )
-            
+
         except Exception as e:
             logger.error(f"MCP tool call failed for {self.name}: {e}")
             return ToolResult(
@@ -80,36 +94,41 @@ class MCPTool(BaseTool):
 
 def mcp_tool(
     name: str | None = None,
-    description: str | None = None, 
+    description: str | None = None,
     server_name: str = "dbt-mcp",
     mcp_tool_name: str | None = None,
+    parameters_schema: dict[str, Any] | None = None,
 ):
     """Decorator to create an MCP tool."""
-    
+
     def decorator(func) -> MCPTool:
         import inspect
-        
+
         tool_name = name or func.__name__
         tool_description = description or func.__doc__ or f"MCP Tool: {tool_name}"
-        
-        # Extract parameters schema from function signature if available
-        sig = inspect.signature(func)
-        parameters_schema = _generate_schema_from_signature(sig)
-        
+
+        # Use provided schema or extract from function signature
+        if parameters_schema is None:
+            sig = inspect.signature(func)
+            final_parameters_schema = _generate_schema_from_signature(sig)
+        else:
+            final_parameters_schema = parameters_schema
+
         tool_instance = MCPTool(
             name=tool_name,
             description=tool_description,
             server_name=server_name,
             mcp_tool_name=mcp_tool_name,
-            parameters_schema=parameters_schema,
+            parameters_schema=final_parameters_schema,
         )
-        
+
         # Auto-register the tool
         from meccaai.core.tool_registry import get_registry
+
         get_registry().register(tool_instance)
-        
+
         return tool_instance
-    
+
     return decorator
 
 
@@ -124,8 +143,9 @@ def _generate_schema_from_signature(sig) -> dict[str, Any]:
 
         param_schema = {"type": "string"}  # Default to string
 
-        # Try to infer type from annotation  
+        # Try to infer type from annotation
         import inspect
+
         if param.annotation != inspect.Parameter.empty:
             if param.annotation is int:
                 param_schema["type"] = "integer"

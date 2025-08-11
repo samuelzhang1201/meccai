@@ -26,6 +26,7 @@ class MCPClient:
         self.timeout = timeout
         self._processes: dict[str, subprocess.Popen] = {}
         self._http_client = httpx.AsyncClient(timeout=timeout)
+        self._request_id = 0
 
     async def __aenter__(self):
         return self
@@ -54,7 +55,11 @@ class MCPClient:
     async def start_server(self, server: MCPServer) -> bool:
         """Start an MCP server process."""
         try:
-            env = server.env.copy() if server.env else {}
+            import os
+
+            env = os.environ.copy()
+            if server.env:
+                env.update(server.env)
 
             process = subprocess.Popen(
                 [server.command] + server.args,
@@ -63,16 +68,63 @@ class MCPClient:
                 stderr=subprocess.PIPE,
                 env=env,
                 text=True,
-                bufsize=1,
+                bufsize=0,  # Unbuffered
             )
 
             self._processes[server.name] = process
+
+            # Wait a bit for server to start
+            await asyncio.sleep(0.5)
             logger.info(f"Started MCP server: {server.name}")
             return True
 
         except Exception as e:
             logger.error(f"Failed to start MCP server {server.name}: {e}")
             return False
+
+    async def _initialize_server(self, server_name: str):
+        """Initialize MCP server with proper handshake."""
+        # Initialize the server
+        await self.call_server_method(
+            server_name,
+            "initialize",
+            {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {"roots": {"listChanged": True}, "sampling": {}},
+                "clientInfo": {"name": "meccaai", "version": "1.0.0"},
+            },
+        )
+
+        # Send initialized notification (no response expected)
+        await self._send_notification(server_name, "notifications/initialized")
+
+    async def _send_notification(
+        self,
+        server_name: str,
+        method: str,
+        params: dict[str, Any] | None = None,
+    ):
+        """Send a notification to an MCP server (no response expected)."""
+        process = self._processes.get(server_name)
+        if not process:
+            raise MCPError(f"Server {server_name} not started")
+
+        notification = {
+            "jsonrpc": "2.0",
+            "method": method,
+            "params": params or {},
+        }
+
+        try:
+            # Send notification
+            notification_json = json.dumps(notification) + "\n"
+            if process.stdin:
+                process.stdin.write(notification_json)
+                process.stdin.flush()
+            else:
+                raise MCPError("Server stdin not available")
+        except Exception as e:
+            raise MCPError(f"Failed to send notification: {e}") from e
 
     async def call_server_method(
         self,
@@ -85,9 +137,10 @@ class MCPClient:
         if not process:
             raise MCPError(f"Server {server_name} not started")
 
+        self._request_id += 1
         request = {
             "jsonrpc": "2.0",
-            "id": 1,
+            "id": self._request_id,
             "method": method,
             "params": params or {},
         }
@@ -95,25 +148,40 @@ class MCPClient:
         try:
             # Send request
             request_json = json.dumps(request) + "\n"
-            process.stdin.write(request_json)
-            process.stdin.flush()
+            if process.stdin:
+                process.stdin.write(request_json)
+                process.stdin.flush()
+            else:
+                raise MCPError("Server stdin not available")
 
-            # Read response
-            response_line = process.stdout.readline()
-            if not response_line:
+            # Read response with timeout
+            if not process.stdout:
+                raise MCPError("Server stdout not available")
+
+            response_line = await asyncio.wait_for(
+                asyncio.to_thread(process.stdout.readline), timeout=self.timeout
+            )
+
+            if not response_line.strip():
                 raise MCPError(f"No response from server {server_name}")
 
             response = json.loads(response_line)
 
             if "error" in response:
-                raise MCPError(f"Server error: {response['error']}")
+                error_info = response["error"]
+                error_msg = error_info.get("message", str(error_info))
+                raise MCPError(f"Server error: {error_msg}")
 
             return response.get("result")
 
+        except TimeoutError as e:
+            raise MCPError(
+                f"Timeout waiting for response from server {server_name}"
+            ) from e
         except json.JSONDecodeError as e:
-            raise MCPError(f"Invalid JSON response: {e}")
+            raise MCPError(f"Invalid JSON response: {e}") from e
         except Exception as e:
-            raise MCPError(f"Communication error: {e}")
+            raise MCPError(f"Communication error: {e}") from e
 
     async def call_endpoint_method(
         self,
@@ -146,9 +214,9 @@ class MCPClient:
             return result.get("result")
 
         except httpx.HTTPError as e:
-            raise MCPError(f"HTTP error: {e}")
+            raise MCPError(f"HTTP error: {e}") from e
         except Exception as e:
-            raise MCPError(f"Request error: {e}")
+            raise MCPError(f"Request error: {e}") from e
 
     async def list_tools(self, server_name: str) -> list[dict[str, Any]]:
         """List available tools from an MCP server."""
@@ -166,6 +234,13 @@ class MCPClient:
         arguments: dict[str, Any],
     ) -> Any:
         """Call a tool on an MCP server."""
+        # Try to initialize server if not already done
+        try:
+            await self._initialize_server(server_name)
+        except Exception:
+            # If initialization fails, try the call anyway
+            pass
+
         params = {
             "name": tool_name,
             "arguments": arguments,
@@ -187,11 +262,11 @@ def load_mcp_servers_config(config_path: str) -> list[MCPServer]:
             # Skip URL-based servers (like Zapier) - only handle command-based servers
             if "url" in server_config:
                 continue
-                
+
             if "command" not in server_config:
                 logger.warning(f"Skipping server {name}: missing 'command' field")
                 continue
-                
+
             server = MCPServer(
                 name=name,
                 command=server_config["command"],
