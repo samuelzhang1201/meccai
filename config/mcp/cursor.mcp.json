@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "dbt-mcp": {
-      "command": "uvx",
+      "command": "/Users/yumengzhang/.local/bin/uvx",
       "args": [
         "--env-file",
         "/Users/yumengzhang/dbt_mcp/dbt-mcp/.env",
@@ -16,6 +16,10 @@
         "run",
         "cortex_agents.py"
       ]
+    },
+    "jira-mcp": {
+      "command": "/Users/yumengzhang/.local/bin/uvx",
+      "args": ["jira-mcp"]
     },
     "Zapier": {
       "url": "https://mcp.zapier.com/api/mcp/s/ZjA0NDgxMGQtMDM5Zi00ZGIxLTkzMDUtMDllMGYyNzE4MmJmOjExODkzOGI5LTUxZmItNGFmZC05ZTdkLWIyZDVjZTFiM2YxOA==/mcp"

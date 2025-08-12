@@ -35,14 +35,13 @@ class MCPTool(BaseTool):
     async def _get_mcp_client(self) -> MCPClient:
         """Get or create MCP client."""
         if self._mcp_client is None:
-            self._mcp_client = MCPClient()
+            from meccaai.core.config import get_settings
+            settings = get_settings()
+            self._mcp_client = MCPClient(timeout=settings.mcp.timeout)
 
             # Load and start servers using settings config path
-            from meccaai.core.config import get_settings
             import os
             from pathlib import Path
-
-            settings = get_settings()
 
             # Handle both relative and absolute paths
             config_path = settings.mcp.config_path

@@ -19,6 +19,11 @@ order for a time dimension.
       "name": "item__category_name",
       "type": "dimension",
       "grain": null
+    },
+    {
+      "name": "metric_time",
+      "grain": "DAY",
+      "type": "dimension"
     }
   ],
   "order_by": [
@@ -26,6 +31,15 @@ order for a time dimension.
       "name": "met_trade_sale_item_sale_extended_price_aud",
       "descending": true
     }]
+ 
+ for date time, you can also use:
+   "group_by": [
+    {
+      "name": "date_key__date",
+      "type": "TimeDimension",
+      "grain": "DAY"
+    }
+   ]
 
 The `where` parameter should be database agnostic SQL syntax, however dimensions
 and entity are referenced differently. For categorical dimensions,

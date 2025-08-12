@@ -20,7 +20,10 @@ class OpenAIRunner:
     """OpenAI conversation runner with tool support."""
 
     def __init__(self, api_key: str | None = None):
-        self.client = AsyncOpenAI(api_key=api_key or settings.openai_api_key)
+        self.client = AsyncOpenAI(
+            api_key=api_key or settings.openai_api_key,
+            timeout=settings.models.openai.timeout,
+        )
         self.registry = get_registry()
 
     async def run_conversation(
@@ -50,8 +53,7 @@ class OpenAIRunner:
                 model=model_name,
                 messages=openai_messages,
                 tools=openai_tools,
-                temperature=settings.models.openai.temperature,
-                max_tokens=settings.models.openai.max_tokens,
+                max_completion_tokens=settings.models.openai.max_tokens,
             )
 
             message = response.choices[0].message
@@ -88,8 +90,7 @@ class OpenAIRunner:
                 final_response = await self.client.chat.completions.create(
                     model=model_name,
                     messages=openai_messages,
-                    temperature=settings.models.openai.temperature,
-                    max_tokens=settings.models.openai.max_tokens,
+                    max_completion_tokens=settings.models.openai.max_tokens,
                 )
 
                 final_message = final_response.choices[0].message

@@ -32,6 +32,7 @@ class ModelConfig(BaseModel):
     model: str
     temperature: float = 0.1
     max_tokens: int = 4096
+    timeout: float = 300.0  # seconds
 
 
 class ModelsConfig(BaseModel):
