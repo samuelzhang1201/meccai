@@ -21,6 +21,7 @@ dependencies = [
     "click>=8.0.0",
     "python-dotenv>=1.0.0",
     "openai-agents>=0.0.15",
+    "boto3>=1.40.9",
 ]
 
 [project.optional-dependencies]
@@ -53,6 +54,7 @@ vector = [
 [project.scripts]
 meccaai = "meccaai.apps.openai_app:main"
 lumos = "meccaai.apps.lumos_app:main"
+lumos-bedrock = "meccaai.apps.lumos_bedrock_app:main"
 
 [tool.setuptools]
 packages = ["meccaai"]

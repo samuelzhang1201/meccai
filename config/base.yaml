@@ -7,7 +7,7 @@ app:
 # MCP Configuration
 mcp:
   config_path: "config/mcp/cursor.mcp.json"
-  timeout: 60
+  timeout: 600
   max_retries: 3
   endpoints_path: "config/mcp/endpoints.yaml"
 

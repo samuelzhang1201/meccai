@@ -6,7 +6,8 @@
         "--env-file",
         "/Users/yumengzhang/dbt_mcp/dbt-mcp/.env",
         "dbt-mcp"
-      ]
+      ],
+      "timeout": 300
     },
     "cortex-agent": {
       "command": "uv",
