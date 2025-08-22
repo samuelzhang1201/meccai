@@ -61,7 +61,7 @@ async def _chat(agent: str | None, workflow: bool, message: str):
         messages = [Message(role="user", content=message)]
 
         result = await system.process_request(messages, agent=agent, workflow=workflow)
-        
+
         if isinstance(result, Message):
             click.echo(result.content)
         else:
@@ -98,7 +98,9 @@ async def _interactive_chat():
     system = LumosBedrockAgentSystem()
 
     click.echo("🤖 Welcome to Lumos AI Interactive Chat with AWS Bedrock!")
-    click.echo("Available agents: data_analyst, data_manager, list_metrics, query_metrics, tableau")
+    click.echo(
+        "Available agents: data_analyst, data_manager, list_metrics, query_metrics, tableau"
+    )
     click.echo("Type 'help' for commands, 'quit' or 'exit' to end the session.\\n")
 
     current_agent = None
@@ -131,7 +133,9 @@ async def _interactive_chat():
                     click.echo(f"✅ Switched to {agent_name} agent")
                 else:
                     click.echo(f"❌ Unknown agent: {agent_name}")
-                    click.echo("Available agents: " + ", ".join(available_agents.keys()))
+                    click.echo(
+                        "Available agents: " + ", ".join(available_agents.keys())
+                    )
                 continue
             elif user_input == "/reset":
                 current_agent = None

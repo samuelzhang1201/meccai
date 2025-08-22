@@ -1,5 +1,0 @@
-#!/usr/bin/env bash
-# Lumos AI System launcher script
-
-cd "$(dirname "$0")"
-uv run python -m meccaai.apps.lumos_app "$@"

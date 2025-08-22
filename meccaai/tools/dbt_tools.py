@@ -123,7 +123,11 @@ def show(select: str, limit: int = 5):
 # Semantic Layer Tools (5 tools)
 
 
-@mcp_tool(name="list_metrics", server_name="dbt-mcp", description=get_tool_description("semantic_layer/list_metrics.md"))
+@mcp_tool(
+    name="list_metrics",
+    server_name="dbt-mcp",
+    description=get_tool_description("semantic_layer/list_metrics.md"),
+)
 def list_metrics():
     """Retrieves all defined metrics.
 
@@ -133,7 +137,11 @@ def list_metrics():
     pass  # Implementation handled by MCP decorator
 
 
-@mcp_tool(name="get_dimensions", server_name="dbt-mcp", description=get_tool_description("semantic_layer/get_dimensions.md"))
+@mcp_tool(
+    name="get_dimensions",
+    server_name="dbt-mcp",
+    description=get_tool_description("semantic_layer/get_dimensions.md"),
+)
 def get_dimensions(metrics: list[str]):
     """Gets dimensions for specified metrics.
 
@@ -146,7 +154,11 @@ def get_dimensions(metrics: list[str]):
     pass  # Implementation handled by MCP decorator
 
 
-@mcp_tool(name="get_entities", server_name="dbt-mcp", description=get_tool_description("semantic_layer/get_entities.md"))
+@mcp_tool(
+    name="get_entities",
+    server_name="dbt-mcp",
+    description=get_tool_description("semantic_layer/get_entities.md"),
+)
 def get_entities(metrics: list[str]):
     """Gets entities for specified metrics.
 
@@ -166,57 +178,55 @@ QUERY_METRICS_SCHEMA = {
         "metrics": {
             "type": "array",
             "items": {"type": "string"},
-            "description": "List of metric names to query"
+            "description": "List of metric names to query",
         },
         "group_by": {
-            "type": "array", 
+            "type": "array",
             "items": {
                 "type": "object",
                 "properties": {
                     "name": {"type": "string"},
-                    "type": {"type": "string"}, 
-                    "grain": {"type": ["string", "null"]}
+                    "type": {"type": "string"},
+                    "grain": {"type": ["string", "null"]},
                 },
-                "required": ["name", "type"]
+                "required": ["name", "type"],
             },
-            "description": "List of dimensions/entities to group results by"
+            "description": "List of dimensions/entities to group results by",
         },
         "order_by": {
             "type": "array",
             "items": {
-                "type": "object", 
+                "type": "object",
                 "properties": {
                     "name": {"type": "string"},
                     "desc": {"type": "boolean"},
-                    "descending": {"type": "boolean"}
+                    "descending": {"type": "boolean"},
                 },
-                "required": ["name"]
+                "required": ["name"],
             },
-            "description": "List of ordering specifications for results"
+            "description": "List of ordering specifications for results",
         },
         "where": {
             "type": "string",
-            "description": "SQL WHERE clause with dimension/entity references"
+            "description": "SQL WHERE clause with dimension/entity references",
         },
-        "limit": {
-            "type": "integer",
-            "description": "Maximum number of rows to return"
-        }
+        "limit": {"type": "integer", "description": "Maximum number of rows to return"},
     },
-    "required": ["metrics"]
+    "required": ["metrics"],
 }
 
+
 @mcp_tool(
-    name="query_metrics", 
-    server_name="dbt-mcp", 
+    name="query_metrics",
+    server_name="dbt-mcp",
     description=get_tool_description("semantic_layer/query_metrics.md"),
-    parameters_schema=QUERY_METRICS_SCHEMA
+    parameters_schema=QUERY_METRICS_SCHEMA,
 )
 def query_metrics(
     metrics: list[str],
     group_by: list[dict] | None = None,  # Fixed: list of objects, not strings
-    order_by: list[dict] | None = None,  # Fixed: list of objects, not strings  
-    where: str | None = None,            # Fixed: string, not list
+    order_by: list[dict] | None = None,  # Fixed: list of objects, not strings
+    where: str | None = None,  # Fixed: string, not list
     limit: int | None = None,
 ):
     """Queries metrics with grouping, ordering, filtering, and limiting.
@@ -233,16 +243,17 @@ def query_metrics(
     """
     pass  # Implementation handled by MCP decorator
 
+
 @mcp_tool(
-    name="get_metrics_compiled_sql", 
+    name="get_metrics_compiled_sql",
     server_name="dbt-mcp",
-    parameters_schema=QUERY_METRICS_SCHEMA
+    parameters_schema=QUERY_METRICS_SCHEMA,
 )
 def get_metrics_compiled_sql(
     metrics: list[str],
     group_by: list[dict] | None = None,  # Fixed: list of objects, not strings
     order_by: list[dict] | None = None,  # Fixed: list of objects, not strings
-    where: str | None = None,            # Fixed: string, not list
+    where: str | None = None,  # Fixed: string, not list
     limit: int | None = None,
 ):
     """Returns compiled SQL for metrics without executing.
@@ -250,7 +261,7 @@ def get_metrics_compiled_sql(
     Args:
         metrics: List of metric names to compile SQL for
         group_by: List of dimension/entity objects with name, type, grain
-        order_by: List of ordering objects with name, desc/descending  
+        order_by: List of ordering objects with name, desc/descending
         where: SQL WHERE clause string with dimension/entity references
         limit: Maximum number of rows to return
 
@@ -258,6 +269,7 @@ def get_metrics_compiled_sql(
         Compiled SQL for the metrics query via MCP
     """
     pass  # Implementation handled by MCP decorator
+
 
 # Schema is now provided via decorator parameter
 

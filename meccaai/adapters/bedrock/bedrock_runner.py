@@ -7,7 +7,12 @@ import boto3
 from botocore.exceptions import ClientError
 
 from meccaai.core.config import get_settings
-from meccaai.core.conversation_logger import log_conversation_start, log_tool_call, log_ai_response, log_conversation_error
+from meccaai.core.conversation_logger import (
+    log_ai_response,
+    log_conversation_error,
+    log_conversation_start,
+    log_tool_call,
+)
 from meccaai.core.logging import get_logger
 from meccaai.core.tool_registry import get_registry
 from meccaai.core.types import Message, Tool, ToolResult
@@ -24,11 +29,13 @@ class BedrockRunner:
         settings = get_settings()
         self.region_name = region_name or settings.aws_region
         self.registry = get_registry()
-        
+
         # Initialize Bedrock client with explicit credentials
         if not settings.aws_access_key_id or not settings.aws_secret_access_key:
-            raise ValueError("AWS credentials not found in settings. Please check your .env file.")
-        
+            raise ValueError(
+                "AWS credentials not found in settings. Please check your .env file."
+            )
+
         session = boto3.Session(
             aws_access_key_id=settings.aws_access_key_id,
             aws_secret_access_key=settings.aws_secret_access_key,
@@ -53,7 +60,7 @@ class BedrockRunner:
         # Get model configuration
         settings = get_settings()
         model_name = model or settings.models.bedrock.model
-        
+
         # Log conversation start
         user_message = messages[-1].content if messages else ""
         log_conversation_start(user_message, model_name, agent)
@@ -70,7 +77,7 @@ class BedrockRunner:
             # Multi-turn conversation loop to handle multiple tool calls
             max_turns = 10  # Prevent infinite loops
             current_messages = bedrock_messages.copy()
-            
+
             for turn in range(max_turns):
                 # Call Bedrock API
                 request_body = {
@@ -86,7 +93,7 @@ class BedrockRunner:
 
                 logger.info(f"🤖 Calling Bedrock model (turn {turn + 1}): {model_name}")
                 logger.debug(f"Request body: {json.dumps(request_body, indent=2)}")
-                
+
                 response = self.client.invoke_model(
                     modelId=model_name,
                     body=json.dumps(request_body),
@@ -103,42 +110,53 @@ class BedrockRunner:
                     tool_results = []
 
                     # Add assistant response to conversation
-                    current_messages.append({
-                        "role": "assistant",
-                        "content": content,
-                    })
+                    current_messages.append(
+                        {
+                            "role": "assistant",
+                            "content": content,
+                        }
+                    )
 
                     for item in content:
                         if item.get("type") == "tool_use":
-                            result = await self._execute_tool_call(item, available_tools)
+                            result = await self._execute_tool_call(
+                                item, available_tools
+                            )
                             tool_results.append(result)
 
                     # Add tool results to conversation
                     for result in tool_results:
                         content_data = (
-                            result.result if result.success and result.result is not None
+                            result.result
+                            if result.success and result.result is not None
                             else result.error or "Tool execution failed"
                         )
-                        
-                        current_messages.append({
-                            "role": "user",
-                            "content": [{
-                                "type": "tool_result",
-                                "tool_use_id": result.id or "unknown",
-                                "content": str(content_data),
-                            }],
-                        })
+
+                        current_messages.append(
+                            {
+                                "role": "user",
+                                "content": [
+                                    {
+                                        "type": "tool_result",
+                                        "tool_use_id": result.id or "unknown",
+                                        "content": str(content_data),
+                                    }
+                                ],
+                            }
+                        )
 
                     # Continue the loop to allow more tool calls
                     continue
 
                 else:
                     # No more tool calls, extract final response
-                    content = self._extract_text_content(response_body.get("content", []))
-                    
+                    content = self._extract_text_content(
+                        response_body.get("content", [])
+                    )
+
                     # Log AI response
                     log_ai_response(content)
-                    
+
                     return Message(role="assistant", content=content)
 
             # If we hit max_turns, return what we have
@@ -152,10 +170,10 @@ class BedrockRunner:
             error_message = e.response["Error"]["Message"]
             error_text = f"Bedrock API error: {error_code} - {error_message}"
             logger.error(error_text)
-            
+
             # Log conversation error
             log_conversation_error(error_text)
-            
+
             return Message(
                 role="assistant",
                 content=f"Error: {error_code} - {error_message}",
@@ -163,10 +181,10 @@ class BedrockRunner:
         except Exception as e:
             error_text = f"Bedrock API error: {str(e)}"
             logger.error(error_text)
-            
+
             # Log conversation error
             log_conversation_error(error_text)
-            
+
             return Message(
                 role="assistant",
                 content=f"Error: {str(e)}",
@@ -201,10 +219,10 @@ class BedrockRunner:
             # Execute tool
             result = await tool.call(**tool_input)
             result.id = tool_id
-            
+
             # Log tool call and result
             log_tool_call(tool_name, tool_input, result)
-            
+
             return result
 
         except Exception as e:
@@ -225,7 +243,7 @@ class BedrockRunner:
             content = f"System: {message.content}"
         else:
             content = message.content
-            
+
         return {
             "role": role,
             "content": content,
@@ -235,11 +253,14 @@ class BedrockRunner:
         """Convert tools to Bedrock tool schema."""
         bedrock_tools = []
         for tool in tools:
-            bedrock_tools.append({
-                "name": tool.name,
-                "description": tool.description,
-                "input_schema": tool.parameters or {"type": "object", "properties": {}},
-            })
+            bedrock_tools.append(
+                {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "input_schema": tool.parameters
+                    or {"type": "object", "properties": {}},
+                }
+            )
         return bedrock_tools
 
     def _extract_text_content(self, content: list[dict[str, Any]]) -> str:

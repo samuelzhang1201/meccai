@@ -1,12 +1,9 @@
 """Lumos AI Agents using AWS Bedrock models."""
 
 from meccaai.adapters.bedrock.bedrock_agents import BedrockAgent, BedrockAgentSystem
-from meccaai.core.config import settings
 from meccaai.core.logging import get_logger
 from meccaai.prompts.loader import get_tool_description
 from meccaai.tools import (
-    atlassian_tools,
-    cortex_agent_tools,
     dbt_tools,
     self_intro,
     tableau_tools,
@@ -38,7 +35,6 @@ def load_tool_agent_prompt(tool_type: str) -> str:
         "get_entities": "You specialize in retrieving entities for specified metrics from the dbt Semantic Layer.",
         "query_metrics": "You specialize in querying the dbt Semantic Layer to answer business questions using metrics.",
         "tableau": "You are a Tableau specialist agent for dashboard and visualization operations.",
-        "snowflake": "You are a Snowflake/Cortex specialist agent for data warehouse operations.",
     }
     return instruction_map.get(tool_type, f"You are a {tool_type} specialist agent.")
 
@@ -109,16 +105,6 @@ def create_tableau_agent() -> BedrockAgent:
     )
 
 
-def create_snowflake_agent() -> BedrockAgent:
-    """Create Snowflake/Cortex specialist agent."""
-    prompt = load_tool_agent_prompt("snowflake")
-    return BedrockAgent(
-        name="snowflake_agent",
-        instructions=prompt,
-        tools=[cortex_agent_tools.run_cortex_agents],
-    )
-
-
 # Create tool agents
 list_metrics_agent = create_list_metrics_agent()
 get_dimensions_agent = create_get_dimensions_agent()
@@ -126,7 +112,6 @@ get_entities_agent = create_get_entities_agent()
 query_metrics_agent = create_query_metrics_agent()
 get_metrics_compiled_sql_agent = create_get_metrics_compiled_sql_agent()
 tableau_agent = create_tableau_agent()
-snowflake_agent = create_snowflake_agent()
 
 # Convert agents to tools
 list_metrics_tool = list_metrics_agent.as_tool(
@@ -153,10 +138,6 @@ tableau_agent_tool = tableau_agent.as_tool(
     tool_name="tableau_agent",
     tool_description="Tableau specialist agent for dashboard and visualization operations",
 )
-snowflake_agent_tool = snowflake_agent.as_tool(
-    tool_name="snowflake_agent",
-    tool_description="Snowflake/Cortex specialist agent for data warehouse operations",
-)
 
 # Main Agents System Instructions
 DATA_ANALYST_INSTRUCTIONS = """
@@ -182,7 +163,6 @@ You have access to these tools:
 - query_metrics: Query semantic layer for business insights
 - get_metrics_compiled_sql: Debug SQL compilation (if needed)
 - tableau_agent: For dashboard and visualization operations
-- snowflake_agent: For advanced Snowflake/Cortex operations
 
 ALWAYS start with list_metrics for data questions, then get_dimensions/get_entities, then query_metrics.
 
@@ -219,7 +199,6 @@ def create_data_analyst() -> BedrockAgent:
             get_metrics_compiled_sql_tool,
             # Other tools
             tableau_agent_tool,
-            snowflake_agent_tool,
             self_intro.self_intro_tool,
         ],
         apply_guardrail=True,  # Enable PII protection
@@ -259,7 +238,6 @@ def get_tool_agents() -> dict[str, BedrockAgent]:
         "get_metrics_compiled_sql_agent": get_metrics_compiled_sql_agent,
         # Other tool agents
         "tableau_agent": tableau_agent,
-        "snowflake_agent": snowflake_agent,
     }
 
 
@@ -284,7 +262,6 @@ class LumosBedrockAgentSystem:
             "get_entities": "Get entities for metrics from dbt Semantic Layer",
             "query_metrics": "Query dbt Semantic Layer for business insights",
             "tableau": "Tableau specialist for dashboard operations",
-            "snowflake": "Snowflake/Cortex specialist for data warehouse operations",
         }
 
     async def process_request(

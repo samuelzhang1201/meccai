@@ -120,10 +120,12 @@ class Settings(BaseSettings):
     openai_api_key: str | None = Field(default=None, alias="OPENAI_API_KEY")
     anthropic_api_key: str | None = Field(default=None, alias="ANTHROPIC_API_KEY")
     tableau_token_value: str | None = Field(default=None, alias="TABLEAU_TOKEN_VALUE")
-    
+
     # AWS Bedrock Keys
     aws_access_key_id: str | None = Field(default=None, alias="AWS_ACCESS_KEY_ID")
-    aws_secret_access_key: str | None = Field(default=None, alias="AWS_SECRET_ACCESS_KEY")
+    aws_secret_access_key: str | None = Field(
+        default=None, alias="AWS_SECRET_ACCESS_KEY"
+    )
     aws_region: str = Field(default="us-east-1", alias="AWS_REGION")
 
     # Configuration sections

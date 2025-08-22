@@ -36,6 +36,7 @@ class MCPTool(BaseTool):
         """Get or create MCP client."""
         if self._mcp_client is None:
             from meccaai.core.config import get_settings
+
             settings = get_settings()
             self._mcp_client = MCPClient(timeout=settings.mcp.timeout)
 

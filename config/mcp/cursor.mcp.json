@@ -8,22 +8,6 @@
         "dbt-mcp"
       ],
       "timeout": 300
-    },
-    "cortex-agent": {
-      "command": "uv",
-      "args": [
-        "--directory",
-        "/Users/yumengzhang/cortex-mcp/sfguide-mcp-cortex-agent",
-        "run",
-        "cortex_agents.py"
-      ]
-    },
-    "jira-mcp": {
-      "command": "/Users/yumengzhang/.local/bin/uvx",
-      "args": ["jira-mcp"]
-    },
-    "Zapier": {
-      "url": "https://mcp.zapier.com/api/mcp/s/ZjA0NDgxMGQtMDM5Zi00ZGIxLTkzMDUtMDllMGYyNzE4MmJmOjExODkzOGI5LTUxZmItNGFmZC05ZTdkLWIyZDVjZTFiM2YxOA==/mcp"
     }
   }
 }
