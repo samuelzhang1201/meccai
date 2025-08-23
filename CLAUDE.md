@@ -24,6 +24,7 @@ This document contains critical information about working with this codebase. Fo
    - Coverage: test edge cases and errors
    - New features require tests
    - Bug fixes require regression tests
+   - put all tests, debug files into tests folder
 
 4. Code Style
     - PEP 8 naming (snake_case for functions/variables)

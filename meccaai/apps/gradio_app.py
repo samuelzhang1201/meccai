@@ -8,6 +8,7 @@ from typing import List, Tuple
 import gradio as gr
 
 from meccaai.apps.lumos_bedrock_agents import LumosBedrockAgentSystem
+from meccaai.core.conversation_logger import get_conversation_logger
 from meccaai.core.logging import get_logger
 from meccaai.core.types import Message
 
@@ -21,18 +22,22 @@ class GradioBedrockApp:
         """Initialize the Gradio app."""
         self.system = LumosBedrockAgentSystem()
         self.conversation_history = []
+        self.current_tool_calls = []  # Track current conversation's tool calls
 
     async def chat(
         self, 
         message: str, 
         history: List[dict], 
         agent_choice: str
-    ) -> Tuple[List[dict], str]:
-        """Process a chat message and return updated history."""
+    ) -> Tuple[List[dict], str, str]:
+        """Process a chat message and return updated history and tool calls."""
         if not message.strip():
-            return history, ""
+            return history, "", self.get_current_tool_calls_html()
 
         try:
+            # Clear previous tool calls for new conversation
+            self.current_tool_calls = []
+            
             # Add user message to history with name
             user_message = f"**You:** {message}"
             history.append({"role": "user", "content": user_message})
@@ -40,21 +45,31 @@ class GradioBedrockApp:
             # Create message object
             messages = [Message(role="user", content=message)]
             
-            # Map agent choice to agent name and display name
+            # Map agent choice to agent name and display name (sync with bedrock app)
             agent_map = {
-                "Data Manager (Coordinator)": ("data_manager", "Data Manager"),
-                "Data Analyst": ("data_analyst", "Data Analyst"), 
-                "Data Engineer": ("data_engineer", "Data Engineer"),
-                "Tableau Admin": ("tableau_admin", "Tableau Admin"),
-                "Data Admin": ("data_admin", "Data Admin")
+                "🎯 Data Manager (Coordinator)": ("data_manager", "Data Manager"),
+                "📊 Data Analyst": ("data_analyst", "Data Analyst"), 
+                "⚙️ Data Engineer": ("data_engineer", "Data Engineer"),
+                "👤 Tableau Admin": ("tableau_admin", "Tableau Admin"),
+                "📋 Data Admin": ("data_admin", "Data Admin")
             }
             
             selected_agent, agent_display_name = agent_map.get(agent_choice, ("data_manager", "Data Manager"))
+            
+            # Get the conversation logger to track tool calls
+            conv_logger = get_conversation_logger()
+            
+            # Store reference to track tool calls for this conversation
+            initial_conversation_count = conv_logger.conversation_count
             
             # Process the request
             result = await self.system.process_request(
                 messages, agent=selected_agent
             )
+            
+            # Capture tool calls from the conversation logger
+            if hasattr(conv_logger, 'current_log_entry') and conv_logger.current_log_entry:
+                self.current_tool_calls = conv_logger.current_log_entry.get('tools_called', [])
             
             # Add assistant response to history with agent name
             agent_message = f"**{agent_display_name}:** {result.content}"
@@ -64,13 +79,17 @@ class GradioBedrockApp:
             logger.info(f"User: {message}")
             logger.info(f"Agent ({selected_agent}): {result.content[:100]}...")
             
-            return history, ""
+            # Generate tool calls HTML
+            tool_calls_html = self.get_current_tool_calls_html()
+            
+            return history, "", tool_calls_html
             
         except Exception as e:
             error_msg = f"**System Error:** {str(e)}"
             logger.error(f"Chat error: {error_msg}")
             history.append({"role": "assistant", "content": error_msg})
-            return history, ""
+            tool_calls_html = self.get_current_tool_calls_html()
+            return history, "", tool_calls_html
 
     def sync_chat(self, message: str, history: List[dict], agent_choice: str):
         """Synchronous wrapper for the async chat method."""
@@ -84,20 +103,14 @@ class GradioBedrockApp:
     def create_interface(self):
         """Create the Gradio interface."""
         
-        # Custom CSS for responsive full-screen layout
+        # Simplified CSS for better visibility
         custom_css = """
-        .gradio-container {
-            height: 100vh !important;
-            max-width: none !important;
-            margin: 0 !important;
-            padding: 0 !important;
-        }
         .header-section {
             background: #000000;
             color: white;
             padding: 20px;
             text-align: center;
-            margin-bottom: 0;
+            margin-bottom: 10px;
         }
         .header-title {
             font-size: 28px;
@@ -121,29 +134,13 @@ class GradioBedrockApp:
         .powered-by span {
             color: white !important;
         }
-        /* Force initial layout proportions */
-        .main-row {
-            display: flex !important;
-            height: calc(100vh - 180px) !important;
-        }
-        .chat-column {
-            width: 60% !important;
-            min-width: 60% !important;
-            flex: 0 0 60% !important;
-            display: flex !important;
-            flex-direction: column !important;
-        }
-        .thinking-column {
-            width: 40% !important;
-            min-width: 40% !important;
-            flex: 0 0 40% !important;
-        }
         .tool-panel {
             background: #f8f9fa;
-            border-left: 2px solid #e9ecef;
-            height: calc(100vh - 180px);
-            overflow-y: auto;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
             padding: 15px;
+            max-height: 500px;
+            overflow-y: auto;
         }
         .tool-call {
             background: white;
@@ -162,47 +159,18 @@ class GradioBedrockApp:
             color: #666;
             font-family: monospace;
         }
-        .chat-area {
-            flex: 1 !important;
-            display: flex !important;
-            flex-direction: column !important;
-            min-height: 0 !important;
-        }
-        .input-area {
-            padding: 10px 0;
-            border-top: 1px solid #e9ecef;
-            flex-shrink: 0 !important;
-        }
-        
-        /* Responsive design */
-        @media (max-width: 1200px) {
-            .header-title { font-size: 24px; }
-            .powered-by { gap: 10px; }
-        }
-        @media (max-width: 768px) {
-            .header-title { font-size: 20px; }
-            .header-subtitle { font-size: 12px; }
-            .powered-by { font-size: 10px; gap: 8px; }
-            .chat-column { width: 100% !important; flex: 0 0 100% !important; }
-            .thinking-column { display: none !important; }
-        }
-        @media (min-width: 1920px) {
-            .header-title { font-size: 32px; }
-            .header-subtitle { font-size: 16px; }
-        }
         """
         
         with gr.Blocks(
             css=custom_css,
             title="MECCA Data Team AI Assistant",
-            theme=gr.themes.Soft(),
-            fill_height=True
+            theme=gr.themes.Soft()
         ) as interface:
             
             # Header with branding
             gr.HTML("""
             <div class="header-section">
-                <div class="header-title">MECCA Data Team AI Assistant (Prototype)</div>
+                <div class="header-title">MECCA Data Team AI Hub (Prototype V25.08.23)</div>
                 <div class="header-subtitle">Intelligent data operations powered by AWS Bedrock Claude 3.5 Sonnet</div>
                 <div class="powered-by">
                     <span>🔗 AWS Bedrock</span>
@@ -214,49 +182,40 @@ class GradioBedrockApp:
             </div>
             """)
             
-            with gr.Row(elem_classes=["main-row"]):
-                with gr.Column(scale=6, elem_classes=["chat-column"]):
-                    with gr.Column(elem_classes=["chat-area"]):
-                        # Main chat interface
-                        chatbot = gr.Chatbot(
-                            height="calc(100vh - 250px)",
-                            show_label=False,
-                            container=False,
-                            bubble_full_width=False,
-                            type="messages"
-                        )
-                        
-                        # Message input area
-                        with gr.Row(elem_classes=["input-area"]):
-                            msg = gr.Textbox(
-                                placeholder="Ask about data, analytics, dbt models, Tableau users, or create Jira issues...",
-                                lines=1,
-                                max_lines=5,
-                                show_label=False,
-                                container=False,
-                                submit_btn=True,
-                                scale=10
-                            )
+            
+            with gr.Row():
+                with gr.Column(scale=6):
+                    # Main chat interface
+                    chatbot = gr.Chatbot(
+                        height=600,
+                        show_label=False,
+                        type="messages"
+                    )
+                    
+                    # Message input area (moved to bottom for better visibility)
+                    msg = gr.Textbox(
+                        placeholder="Ask about data, analytics, dbt models, Tableau users, or create Jira issues...",
+                        lines=1,
+                        max_lines=3,
+                        show_label=False,
+                        submit_btn=True
+                    )
                 
-                with gr.Column(scale=4, elem_classes=["thinking-column"]):
+                with gr.Column(scale=4):
                     # Tool thinking panel
                     gr.HTML('<h4 style="margin: 0 0 10px 0; color: #1e3a8a;">🔧 AI Thinking Process</h4>')
                     tool_panel = gr.HTML(
-                        '<div class="tool-panel"><p style="color: #666; font-style: italic;">Tool calls will appear here during processing...</p></div>',
-                        elem_classes=["tool-panel"]
+                        '<div class="tool-panel"><p style="color: #666; font-style: italic;">Tool calls will appear here during processing...</p></div>'
                     )
-            
-            # Hidden agent selection (defaults to data manager)  
-            agent_choice = gr.State(value="Data Manager (Coordinator)")
             
             # Event handlers
             def submit_message(message, history):
                 if message.strip():
-                    new_history, empty_msg = self.sync_chat(message, history, "Data Manager (Coordinator)")
-                    # Update tool panel with recent activity
-                    tool_html = self.get_recent_tool_calls()
+                    # Always use Data Manager (Coordinator) as default
+                    selected_agent = "🎯 Data Manager (Coordinator)"
+                    new_history, empty_msg, tool_html = self.sync_chat(message, history, selected_agent)
                     return new_history, empty_msg, tool_html
-                return history, message, tool_panel.value
+                return history, message, self.get_current_tool_calls_html()
             
             # Bind events
             msg.submit(
@@ -267,28 +226,97 @@ class GradioBedrockApp:
         
         return interface
     
-    def get_recent_tool_calls(self):
-        """Generate HTML for recent tool calls (placeholder for now)."""
-        return """
-        <div class="tool-panel">
-            <div class="tool-call">
-                <div class="tool-name">🤖 agent_coordinator</div>
-                <div class="tool-args">Analyzing user request...</div>
+    def get_current_tool_calls_html(self):
+        """Generate HTML for current conversation's tool calls."""
+        if not self.current_tool_calls:
+            return """
+            <div class="tool-panel">
+                <p style="color: #666; font-style: italic; text-align: center; padding: 20px;">
+                    🤖 AI thinking process will appear here during processing...
+                </p>
             </div>
-            <div class="tool-call">
-                <div class="tool-name">🔍 data_analyst_agent</div>
-                <div class="tool-args">Processing data query...</div>
+            """
+        
+        html_parts = ['<div class="tool-panel">']
+        
+        # Add thinking process header
+        html_parts.append(f"""
+            <div style="margin-bottom: 15px; padding: 10px; background: #e3f2fd; border-radius: 6px; border-left: 4px solid #1976d2;">
+                <strong>🧠 AI Thinking Process</strong><br>
+                <small style="color: #666;">{len(self.current_tool_calls)} tools executed</small>
             </div>
-            <div class="tool-call">
-                <div class="tool-name">📊 get_tableau_users</div>
-                <div class="tool-args">limit=50, active_only=true</div>
-            </div>
-            <div class="tool-call">
-                <div class="tool-name">✅ export_to_csv</div>
-                <div class="tool-args">filename="users_export.csv"</div>
-            </div>
-        </div>
-        """
+        """)
+        
+        # Add each tool call
+        for i, tool_call in enumerate(self.current_tool_calls, 1):
+            tool_name = tool_call.get('tool_name', 'Unknown Tool')
+            tool_input = tool_call.get('tool_input', {})
+            tool_result = tool_call.get('tool_result', {})
+            timestamp = tool_call.get('timestamp', '')
+            
+            # Format timestamp
+            try:
+                if timestamp:
+                    from datetime import datetime
+                    dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                    time_str = dt.strftime('%H:%M:%S')
+                else:
+                    time_str = ""
+            except:
+                time_str = ""
+            
+            # Determine status icon and color
+            success = tool_result.get('success', False)
+            status_icon = "✅" if success else "❌"
+            border_color = "#4caf50" if success else "#f44336"
+            
+            # Format tool input parameters
+            input_parts = []
+            for key, value in tool_input.items():
+                if isinstance(value, str) and len(value) > 50:
+                    value = value[:47] + "..."
+                input_parts.append(f"{key}={value}")
+            input_str = ", ".join(input_parts) if input_parts else "No parameters"
+            
+            # Get tool result summary
+            if success:
+                result_data = tool_result.get('result')
+                if isinstance(result_data, dict):
+                    if 'total_users' in result_data:
+                        result_summary = f"Found {result_data['total_users']} users"
+                    elif 'total_workbooks' in result_data:
+                        result_summary = f"Found {result_data['total_workbooks']} workbooks"
+                    elif 'total_datasources' in result_data:
+                        result_summary = f"Found {result_data['total_datasources']} datasources"
+                    elif 'models' in result_data:
+                        result_summary = f"Found {len(result_data.get('models', []))} models"
+                    else:
+                        result_summary = "Success"
+                else:
+                    result_summary = "Success"
+            else:
+                error = tool_result.get('error', 'Unknown error')
+                result_summary = f"Error: {error[:50]}..." if len(error) > 50 else f"Error: {error}"
+            
+            html_parts.append(f"""
+                <div class="tool-call" style="border-left: 3px solid {border_color};">
+                    <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 5px;">
+                        <div class="tool-name" style="flex: 1;">
+                            <span style="font-size: 14px;">{status_icon} <strong>{tool_name}</strong></span>
+                            {f'<small style="color: #666; margin-left: 10px;">{time_str}</small>' if time_str else ''}
+                        </div>
+                    </div>
+                    <div class="tool-args" style="color: #666; font-size: 11px; margin-bottom: 8px;">
+                        📝 <strong>Input:</strong> {input_str}
+                    </div>
+                    <div style="color: #333; font-size: 11px; padding: 5px 0;">
+                        📊 <strong>Result:</strong> {result_summary}
+                    </div>
+                </div>
+            """)
+        
+        html_parts.append('</div>')
+        return ''.join(html_parts)
 
     def launch(self, **kwargs):
         """Launch the Gradio interface."""

@@ -1,6 +1,5 @@
 """Tableau REST API tools for data visualization and reporting."""
 
-import json
 from typing import Any
 from urllib.parse import urljoin
 
@@ -282,7 +281,9 @@ async def list_all_personal_access_tokens() -> ToolResult:
         # Sign out
         await auth_manager.sign_out()
 
-        return {"total_tokens": len(all_tokens), "tokens": all_tokens}
+        return ToolResult(
+            success=True, result={"total_tokens": len(all_tokens), "tokens": all_tokens}
+        )
 
     except Exception as e:
         await auth_manager.sign_out()  # Ensure cleanup
@@ -364,7 +365,7 @@ async def add_user_to_site(
         # Sign out
         await auth_manager.sign_out()
 
-        return user_data
+        return ToolResult(success=True, result=user_data)
 
     except Exception as e:
         await auth_manager.sign_out()  # Ensure cleanup
@@ -411,7 +412,7 @@ async def get_users_on_site() -> ToolResult:
                 response.raise_for_status()
 
                 data = response.json()
-                
+
                 # Extract users data
                 users_data = data.get("users", {})
                 if "user" in users_data:
@@ -433,7 +434,9 @@ async def get_users_on_site() -> ToolResult:
         # Sign out
         await auth_manager.sign_out()
 
-        return {"total_users": len(all_users), "users": all_users}
+        return ToolResult(
+            success=True, result={"total_users": len(all_users), "users": all_users}
+        )
 
     except Exception as e:
         await auth_manager.sign_out()  # Ensure cleanup
@@ -483,7 +486,7 @@ async def get_users_in_group(group_id: str) -> ToolResult:
                 response.raise_for_status()
 
                 data = response.json()
-                
+
                 # Extract users data
                 users_data = data.get("users", {})
                 if "user" in users_data:
@@ -505,11 +508,14 @@ async def get_users_in_group(group_id: str) -> ToolResult:
         # Sign out
         await auth_manager.sign_out()
 
-        return {
-            "group_id": group_id,
-            "total_users": len(all_users),
-            "users": all_users,
-        }
+        return ToolResult(
+            success=True,
+            result={
+                "group_id": group_id,
+                "total_users": len(all_users),
+                "users": all_users,
+            },
+        )
 
     except Exception as e:
         await auth_manager.sign_out()  # Ensure cleanup
@@ -556,7 +562,7 @@ async def get_group_set() -> ToolResult:
                 response.raise_for_status()
 
                 data = response.json()
-                
+
                 # Extract groups data
                 groups_data = data.get("groups", {})
                 if "group" in groups_data:
@@ -578,7 +584,9 @@ async def get_group_set() -> ToolResult:
         # Sign out
         await auth_manager.sign_out()
 
-        return {"total_groups": len(all_groups), "groups": all_groups}
+        return ToolResult(
+            success=True, result={"total_groups": len(all_groups), "groups": all_groups}
+        )
 
     except Exception as e:
         await auth_manager.sign_out()  # Ensure cleanup
@@ -670,9 +678,357 @@ async def update_user(
         # Sign out
         await auth_manager.sign_out()
 
-        return user_data
+        return ToolResult(success=True, result=user_data)
 
     except Exception as e:
         await auth_manager.sign_out()  # Ensure cleanup
         logger.error(f"Error updating user {user_id}: {e}")
+        raise e
+
+
+# Content Management Tools
+
+
+@tool("get_content_usage")
+async def get_content_usage(
+    content_items: list[dict[str, str]] | None = None,
+) -> ToolResult:
+    """Get content usage statistics using the BatchGetUsage endpoint.
+
+    Note: This endpoint is only available for Tableau Cloud (API 3.17+), not Tableau Server.
+    Gets usage metrics for workbooks, views, data sources, and flows.
+
+    Args:
+        content_items: List of content items to get usage for. Each item should have
+                      'content_type' (workbook/view/datasource/flow) and 'luid' keys.
+                      If None, will attempt to get general usage statistics.
+
+    Returns:
+        ToolResult: Content usage statistics including views, favorites, and access metrics
+    """
+    auth_manager = TableauAuthManager()
+
+    try:
+        # Sign in
+        await auth_manager.sign_in()
+
+        # Build the API endpoint URL for the BatchGetUsage endpoint
+        # This is the new content exploration endpoint format (note: uses /api/- instead of version)
+        url = urljoin(auth_manager.server_url, "/api/-/content/usage-stats")
+
+        # Prepare request body based on the correct API format
+        # The correct format is: {"content_items": [{"luid": "id", "type": "workbook"}]}
+        if content_items:
+            # Handle case where content_items might be passed as a JSON string from Bedrock
+            if isinstance(content_items, str):
+                try:
+                    import json
+                    content_items = json.loads(content_items)
+                    logger.info(f"Parsed content_items from JSON string: {len(content_items)} items")
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to parse content_items JSON string: {e}")
+                    return ToolResult(
+                        success=False,
+                        result={"error": f"Invalid content_items JSON format: {e}"}
+                    )
+            
+            # Format each content item properly for the API
+            formatted_items = []
+            for item in content_items:
+                if isinstance(item, dict):
+                    # Handle both contentType and type field names
+                    content_type = item.get("contentType") or item.get("type", "workbook")
+                    luid = item.get("luid") or item.get("id")
+                    
+                    if luid:
+                        formatted_items.append({
+                            "luid": luid,
+                            "type": content_type
+                        })
+            
+            if formatted_items:
+                request_body = {"content_items": formatted_items}
+            else:
+                # If no valid items, return empty result immediately
+                return ToolResult(
+                    success=True, 
+                    result={
+                        "message": "No valid content items provided for usage statistics",
+                        "content_usage": {"content_items": []}
+                    }
+                )
+        else:
+            # If no content items provided, return empty result immediately
+            return ToolResult(
+                success=True,
+                result={
+                    "message": "No content items specified. Please provide workbook/view IDs to get usage statistics.",
+                    "content_usage": {"content_items": []}
+                }
+            )
+
+        # Configure timeout for potentially long-running request
+        timeout = httpx.Timeout(120.0)  # 2 minute timeout
+
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(
+                url,
+                json=request_body,
+                headers={
+                    **auth_manager.get_auth_headers(),
+                    "Content-Type": "application/vnd.tableau.usagestats.v1.BatchGetUsageRequest+json",
+                    "Accept": "application/vnd.tableau.usagestats.v1.ContentItemUsageStatsList+json",
+                },
+            )
+
+            # Log response status code and details
+            logger.info(
+                f"Tableau API get_content_usage response status: {response.status_code}"
+            )
+            logger.debug(f"Request URL: {url}")
+            logger.debug(f"Request body: {request_body}")
+
+            # Accept both 200 and 201 status codes (API returns 201 Created)
+            if response.status_code not in [200, 201]:
+                logger.error(f"API Error Response: {response.text}")
+
+            response.raise_for_status()
+
+            # Parse JSON response
+            data = response.json()
+
+        # Sign out
+        await auth_manager.sign_out()
+
+        return ToolResult(success=True, result={"content_usage": data})
+
+    except Exception as e:
+        await auth_manager.sign_out()  # Ensure cleanup
+        logger.error(f"Error getting content usage: {e}")
+        raise e
+
+
+@tool("get_datasources")
+async def get_datasources() -> ToolResult:
+    """Get all published data sources on the site.
+
+    Returns:
+        ToolResult: List of all published data sources with their details
+    """
+    auth_manager = TableauAuthManager()
+
+    try:
+        # Sign in
+        await auth_manager.sign_in()
+
+        # Build the API endpoint URL
+        url = urljoin(
+            auth_manager.server_url,
+            f"/api/{auth_manager.api_version}/sites/{auth_manager.site_id}/datasources",
+        )
+
+        # Make the API request with pagination support
+        all_datasources = []
+        page_number = 1
+        page_size = 100
+
+        # Configure timeout
+        timeout = httpx.Timeout(60.0)  # 60 second timeout
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            while True:
+                params = {"pageSize": page_size, "pageNumber": page_number}
+
+                response = await client.get(
+                    url, params=params, headers=auth_manager.get_auth_headers()
+                )
+
+                # Log response status code
+                logger.info(
+                    f"Tableau API get_datasources response status: {response.status_code}"
+                )
+                response.raise_for_status()
+
+                data = response.json()
+
+                # Extract datasources data
+                datasources_data = data.get("datasources", {})
+                if "datasource" in datasources_data:
+                    datasources = datasources_data["datasource"]
+                    if isinstance(datasources, list):
+                        all_datasources.extend(datasources)
+                    elif datasources:  # Single datasource
+                        all_datasources.append(datasources)
+
+                # Check pagination from top level
+                pagination = data.get("pagination", {})
+                total_available = int(pagination.get("totalAvailable", 0))
+
+                if page_number * page_size >= total_available:
+                    break
+
+                page_number += 1
+
+        # Sign out
+        await auth_manager.sign_out()
+
+        return ToolResult(
+            success=True,
+            result={
+                "total_datasources": len(all_datasources),
+                "datasources": all_datasources,
+            },
+        )
+
+    except Exception as e:
+        await auth_manager.sign_out()  # Ensure cleanup
+        logger.error(f"Error getting datasources: {e}")
+        raise e
+
+
+@tool("get_workbooks")
+async def get_workbooks() -> ToolResult:
+    """Get all workbooks on the site.
+
+    Returns:
+        ToolResult: List of all workbooks with their details
+    """
+    auth_manager = TableauAuthManager()
+
+    try:
+        # Sign in
+        await auth_manager.sign_in()
+
+        # Build the API endpoint URL
+        url = urljoin(
+            auth_manager.server_url,
+            f"/api/{auth_manager.api_version}/sites/{auth_manager.site_id}/workbooks",
+        )
+
+        # Make the API request with pagination support
+        all_workbooks = []
+        page_number = 1
+        page_size = 100
+
+        # Configure timeout
+        timeout = httpx.Timeout(60.0)  # 60 second timeout
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            while True:
+                params = {"pageSize": page_size, "pageNumber": page_number}
+
+                response = await client.get(
+                    url, params=params, headers=auth_manager.get_auth_headers()
+                )
+
+                # Log response status code
+                logger.info(
+                    f"Tableau API get_workbooks response status: {response.status_code}"
+                )
+                response.raise_for_status()
+
+                data = response.json()
+
+                # Extract workbooks data
+                workbooks_data = data.get("workbooks", {})
+                if "workbook" in workbooks_data:
+                    workbooks = workbooks_data["workbook"]
+                    if isinstance(workbooks, list):
+                        all_workbooks.extend(workbooks)
+                    elif workbooks:  # Single workbook
+                        all_workbooks.append(workbooks)
+
+                # Check pagination from top level
+                pagination = data.get("pagination", {})
+                total_available = int(pagination.get("totalAvailable", 0))
+
+                if page_number * page_size >= total_available:
+                    break
+
+                page_number += 1
+
+        # Sign out
+        await auth_manager.sign_out()
+
+        return ToolResult(
+            success=True,
+            result={"total_workbooks": len(all_workbooks), "workbooks": all_workbooks},
+        )
+
+    except Exception as e:
+        await auth_manager.sign_out()  # Ensure cleanup
+        logger.error(f"Error getting workbooks: {e}")
+        raise e
+
+
+@tool("get_views_on_site")
+async def get_views_on_site() -> ToolResult:
+    """Get all views on the site.
+
+    This can be used to get view LUIDs that can then be passed to get_content_usage.
+
+    Returns:
+        ToolResult: List of all views with their details including LUIDs
+    """
+    auth_manager = TableauAuthManager()
+
+    try:
+        # Sign in
+        await auth_manager.sign_in()
+
+        # Build the API endpoint URL
+        url = urljoin(
+            auth_manager.server_url,
+            f"/api/{auth_manager.api_version}/sites/{auth_manager.site_id}/views",
+        )
+
+        # Make the API request with pagination support
+        all_views = []
+        page_number = 1
+        page_size = 100
+
+        # Configure timeout
+        timeout = httpx.Timeout(60.0)  # 60 second timeout
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            while True:
+                params = {"pageSize": page_size, "pageNumber": page_number}
+
+                response = await client.get(
+                    url, params=params, headers=auth_manager.get_auth_headers()
+                )
+
+                # Log response status code
+                logger.info(
+                    f"Tableau API get_views_on_site response status: {response.status_code}"
+                )
+                response.raise_for_status()
+
+                data = response.json()
+
+                # Extract views data
+                views_data = data.get("views", {})
+                if "view" in views_data:
+                    views = views_data["view"]
+                    if isinstance(views, list):
+                        all_views.extend(views)
+                    elif views:  # Single view
+                        all_views.append(views)
+
+                # Check pagination from top level
+                pagination = data.get("pagination", {})
+                total_available = int(pagination.get("totalAvailable", 0))
+
+                if page_number * page_size >= total_available:
+                    break
+
+                page_number += 1
+
+        # Sign out
+        await auth_manager.sign_out()
+
+        return ToolResult(
+            success=True, result={"total_views": len(all_views), "views": all_views}
+        )
+
+    except Exception as e:
+        await auth_manager.sign_out()  # Ensure cleanup
+        logger.error(f"Error getting views on site: {e}")
         raise e

@@ -3,7 +3,13 @@
 from meccaai.adapters.bedrock.bedrock_agents import BedrockAgent, BedrockAgentSystem
 from meccaai.core.logging import get_logger
 from meccaai.prompts.loader import get_tool_description
-from meccaai.tools import atlassian_tools, dbt_tools, export_tools, self_intro, tableau_tools
+from meccaai.tools import (
+    atlassian_tools,
+    dbt_tools,
+    export_tools,
+    self_intro,
+    tableau_tools,
+)
 
 logger = get_logger(__name__)
 
@@ -30,7 +36,7 @@ def load_tool_agent_prompt(tool_type: str) -> str:
         "data_engineer": "You are a Data Engineer specialized in dbt project management and discovery.",
         "tableau_admin": "You are a Tableau Administrator specialized in user management and administration.",
         "data_admin": "You are a Data Administrator specialized in project management using Jira.",
-        "data_manager": "You are a Data Manager responsible for workflow automation and coordinating other agents.",
+        "data_manager": "You are a Data Manager responsible for workflow automation and coordinating other agents, and final reporting",
     }
     return instruction_map.get(tool_type, f"You are a {tool_type} specialist agent.")
 
@@ -150,6 +156,36 @@ def create_tableau_admin() -> BedrockAgent:
     - get_group_set: List all groups on the site
     - update_user: Update user properties and permissions
     - list_all_personal_access_tokens: Manage access tokens
+    - get_content_usage: Get content usage statistics and metrics (requires specific content items with luid and contentType)
+    - get_datasources: List all published data sources on the site
+    - get_workbooks: List all workbooks on the site
+    - get_views_on_site: List all views on the site
+
+    CRITICAL WORKFLOW for content usage analysis:
+    - When asked about workbook usage statistics (like "workbooks with <100 views"):
+      1. First call get_workbooks to get all workbooks with their IDs and names
+      2. IMPORTANT: Extract the workbook IDs from step 1 and format them for get_content_usage
+      3. Call get_content_usage with specific workbook items formatted as: [{"luid": "workbook_id", "contentType": "workbook"}] for EACH workbook
+      4. The get_content_usage API now works and returns usage data with hitsTotal and hitsLastTwoWeeksTotal
+      5. Filter workbooks based on the hitsTotal value to find those with low usage
+      6. Present results showing: workbook name, owner, view count (hitsTotal), and workbook ID
+      
+    EXAMPLE: If get_workbooks returns workbooks with IDs ["id1", "id2", "id3"], then call:
+    get_content_usage(content_items=[
+        {"luid": "id1", "contentType": "workbook"},
+        {"luid": "id2", "contentType": "workbook"}, 
+        {"luid": "id3", "contentType": "workbook"}
+    ])
+    
+    The API will return usage data with structure:
+    {
+      "content_items": [
+        {
+          "content": {"luid": "id1", "type": "workbook"},
+          "usage": {"hitsTotal": "15", "hitsLastTwoWeeksTotal": "0"}
+        }
+      ]
+    }
 
     Always confirm actions before making changes to user accounts or permissions.
     Focus on security best practices and proper access management.
@@ -165,6 +201,10 @@ def create_tableau_admin() -> BedrockAgent:
             tableau_tools.get_group_set,
             tableau_tools.update_user,
             tableau_tools.list_all_personal_access_tokens,
+            tableau_tools.get_content_usage,
+            tableau_tools.get_datasources,
+            tableau_tools.get_workbooks,
+            tableau_tools.get_views_on_site,
         ],
     )
 
@@ -207,8 +247,8 @@ def create_data_admin() -> BedrockAgent:
 
 
 def create_data_manager() -> BedrockAgent:
-    """Create Data Manager agent for workflow automation and coordination."""
-    prompt = """You are a Data Manager responsible for workflow automation, project management, and coordinating other specialized agents.
+    """Create Data Manager agent for workflow automation, coordination, reporting, and analysis."""
+    prompt = """You are a Data Manager responsible for workflow automation, project management, coordinating other specialized agents, providing comprehensive data reporting, and generating insights through analysis.
 
     Your core responsibilities include:
     - Acting as the main point of contact for users
@@ -216,7 +256,14 @@ def create_data_manager() -> BedrockAgent:
     - Planning and orchestrating complex data workflows
     - Project management and team coordination
     - Making decisions about which agent should handle specific tasks
+    - Providing detailed data reports in human-readable formats
+    - Presenting information in clear, structured formats
     - Exporting data and results to CSV files when requested
+    - Fetching responses from multiple agents and tools
+    - Analyzing information received from various sources
+    - Generating insights and recommendations based on data analysis
+    - Identifying patterns, trends, and actionable insights
+    - Providing business intelligence and strategic recommendations
 
     You have access to specialized agent tools:
     - data_analyst_agent: For semantic layer queries and data insights using dbt metrics
@@ -230,31 +277,59 @@ def create_data_manager() -> BedrockAgent:
     - list_export_files: List all previously exported files
     - delete_export_file: Delete specific export files
 
+    IMPORTANT DATA PRESENTATION GUIDELINES:
+    - When users ask for specific data (like "show me 10 users"), present the information in detailed, human-readable formats
+    - Use tables, lists, or structured formats to display data clearly
+    - Include all relevant details from the API responses
+    - Do not summarize unless specifically asked to do so
+    - Present raw data in organized, easy-to-read formats
+    - When showing user lists, include user IDs, names, roles, and other relevant information
+    - When showing group information, include group IDs, names, and member counts
+    - When showing PAT information, include token names, creation dates, and usage details
+
+    ANALYSIS AND INSIGHT GENERATION CAPABILITIES:
+    - Fetch data from multiple agents and tools to gather comprehensive information
+    - Cross-reference data from different sources (Tableau, dbt, Jira, etc.)
+    - Identify patterns and trends across datasets
+    - Generate actionable insights and recommendations
+    - Provide business intelligence analysis
+    - Create comprehensive reports with analysis and conclusions
+    - Suggest optimizations and improvements based on data analysis
+    - Identify potential issues or opportunities from the data
+
     When users ask questions or request tasks:
     1. Analyze the request to determine which specialized agent is best suited
     2. Call the appropriate agent tool with a clear, detailed request
-    3. Present the complete, detailed results directly to the user
-    4. For complex tasks, coordinate multiple agents as needed
-    5. Always show the actual data/results, not just summaries
+    3. For complex analysis requests, fetch data from multiple sources
+    4. Analyze the collected information to identify patterns and insights
+    5. Present the complete, detailed results with analysis and recommendations
+    6. For complex tasks, coordinate multiple agents as needed
+    7. Always show the actual data/results, not just summaries
+    8. Provide insights and recommendations based on the analysis
 
     Examples:
     - For "show me tableau users" → Use tableau_admin_agent and display the complete user list with all details (names, emails, roles, last login, etc.) in a formatted table
+    - For "analyze our tableau usage" → Fetch user data, group data, and PAT data from tableau_admin_agent, then analyze usage patterns, identify inactive users, suggest optimizations
     - For "what are our sales metrics" → Use data_analyst_agent and show all available metrics with their definitions
+    - For "analyze our data pipeline health" → Use data_engineer_agent to get model status, test results, and execution times, then analyze pipeline performance and identify bottlenecks
     - For "run dbt models" → Use data_engineer_agent and show execution results with details
     - For "create a jira issue" → Use data_admin_agent and show issue creation status
-    
-    CRITICAL: When displaying data from agents, always show the actual detailed information, not summaries. 
+    - For "workbooks with low views" → First get all workbooks using tableau_admin_agent, then get usage stats for those specific workbooks, filter by view count, and present results with names, UIDs, owners, and view counts
+    - For "comprehensive data team report" → Fetch data from all agents (users, metrics, pipeline status, project status) and create a comprehensive analysis with insights and recommendations
+
+    CRITICAL: When displaying data from agents, always show the actual detailed information, not summaries.
     Present data in tables or structured format showing all available fields.
+    When providing analysis, include insights, patterns, trends, and actionable recommendations.
 
     IMPORTANT: Only use CSV export tools when the user explicitly requests export/download/CSV:
     - For "export tableau users to CSV" → Use export_tableau_users_to_csv (gets actual data directly)
     - For "export users to CSV" → Use export_tableau_users_to_csv for Tableau users
     - For "download data as CSV" → Use appropriate export tool based on data type
     - For "save to file" → Use export_result_to_csv for generic data
-    
+
     DO NOT offer CSV export unless specifically requested by the user.
 
-    You are the orchestrator and primary interface for users, ensuring they get the best possible service by leveraging the right expertise for each task.
+    You are the orchestrator and primary interface for users, ensuring they get the best possible service by leveraging the right expertise for each task, presenting detailed, comprehensive reports, and providing valuable insights through data analysis.
     """
 
     # Note: We'll add the agent tools after all agents are created
