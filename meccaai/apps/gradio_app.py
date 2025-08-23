@@ -25,38 +25,40 @@ class GradioBedrockApp:
     async def chat(
         self, 
         message: str, 
-        history: List[Tuple[str, str]], 
+        history: List[dict], 
         agent_choice: str
-    ) -> Tuple[List[Tuple[str, str]], str]:
+    ) -> Tuple[List[dict], str]:
         """Process a chat message and return updated history."""
         if not message.strip():
             return history, ""
 
         try:
-            # Add user message to history
-            history.append((message, ""))
+            # Add user message to history with name
+            user_message = f"**You:** {message}"
+            history.append({"role": "user", "content": user_message})
             
             # Create message object
             messages = [Message(role="user", content=message)]
             
-            # Map agent choice to agent name
+            # Map agent choice to agent name and display name
             agent_map = {
-                "Data Manager (Coordinator)": "data_manager",
-                "Data Analyst": "data_analyst", 
-                "Data Engineer": "data_engineer",
-                "Tableau Admin": "tableau_admin",
-                "Data Admin": "data_admin"
+                "Data Manager (Coordinator)": ("data_manager", "Data Manager"),
+                "Data Analyst": ("data_analyst", "Data Analyst"), 
+                "Data Engineer": ("data_engineer", "Data Engineer"),
+                "Tableau Admin": ("tableau_admin", "Tableau Admin"),
+                "Data Admin": ("data_admin", "Data Admin")
             }
             
-            selected_agent = agent_map.get(agent_choice, "data_manager")
+            selected_agent, agent_display_name = agent_map.get(agent_choice, ("data_manager", "Data Manager"))
             
             # Process the request
             result = await self.system.process_request(
                 messages, agent=selected_agent
             )
             
-            # Update the last message in history with the response
-            history[-1] = (message, result.content)
+            # Add assistant response to history with agent name
+            agent_message = f"**{agent_display_name}:** {result.content}"
+            history.append({"role": "assistant", "content": agent_message})
             
             # Log the conversation
             logger.info(f"User: {message}")
@@ -65,12 +67,12 @@ class GradioBedrockApp:
             return history, ""
             
         except Exception as e:
-            error_msg = f"Error: {str(e)}"
+            error_msg = f"**System Error:** {str(e)}"
             logger.error(f"Chat error: {error_msg}")
-            history[-1] = (message, error_msg)
+            history.append({"role": "assistant", "content": error_msg})
             return history, ""
 
-    def sync_chat(self, message: str, history: List[Tuple[str, str]], agent_choice: str):
+    def sync_chat(self, message: str, history: List[dict], agent_choice: str):
         """Synchronous wrapper for the async chat method."""
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -82,139 +84,211 @@ class GradioBedrockApp:
     def create_interface(self):
         """Create the Gradio interface."""
         
-        # Custom CSS for better styling
+        # Custom CSS for responsive full-screen layout
         custom_css = """
         .gradio-container {
-            max-width: 1200px !important;
-            margin: auto;
+            height: 100vh !important;
+            max-width: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
         }
-        .main-header {
-            text-align: center;
-            padding: 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        .header-section {
+            background: #000000;
             color: white;
-            border-radius: 10px;
-            margin-bottom: 20px;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 0;
         }
-        .agent-info {
+        .header-title {
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: white !important;
+        }
+        .header-subtitle {
+            font-size: 14px;
+            margin-bottom: 10px;
+            color: white !important;
+        }
+        .powered-by {
+            font-size: 12px;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            flex-wrap: wrap;
+            color: white !important;
+        }
+        .powered-by span {
+            color: white !important;
+        }
+        /* Force initial layout proportions */
+        .main-row {
+            display: flex !important;
+            height: calc(100vh - 180px) !important;
+        }
+        .chat-column {
+            width: 60% !important;
+            min-width: 60% !important;
+            flex: 0 0 60% !important;
+            display: flex !important;
+            flex-direction: column !important;
+        }
+        .thinking-column {
+            width: 40% !important;
+            min-width: 40% !important;
+            flex: 0 0 40% !important;
+        }
+        .tool-panel {
             background: #f8f9fa;
+            border-left: 2px solid #e9ecef;
+            height: calc(100vh - 180px);
+            overflow-y: auto;
             padding: 15px;
-            border-radius: 8px;
-            margin: 10px 0;
-            border-left: 4px solid #007bff;
+        }
+        .tool-call {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 10px;
+            margin-bottom: 10px;
+            font-size: 12px;
+        }
+        .tool-name {
+            font-weight: 600;
+            color: #1e3a8a;
+            margin-bottom: 5px;
+        }
+        .tool-args {
+            color: #666;
+            font-family: monospace;
+        }
+        .chat-area {
+            flex: 1 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            min-height: 0 !important;
+        }
+        .input-area {
+            padding: 10px 0;
+            border-top: 1px solid #e9ecef;
+            flex-shrink: 0 !important;
+        }
+        
+        /* Responsive design */
+        @media (max-width: 1200px) {
+            .header-title { font-size: 24px; }
+            .powered-by { gap: 10px; }
+        }
+        @media (max-width: 768px) {
+            .header-title { font-size: 20px; }
+            .header-subtitle { font-size: 12px; }
+            .powered-by { font-size: 10px; gap: 8px; }
+            .chat-column { width: 100% !important; flex: 0 0 100% !important; }
+            .thinking-column { display: none !important; }
+        }
+        @media (min-width: 1920px) {
+            .header-title { font-size: 32px; }
+            .header-subtitle { font-size: 16px; }
         }
         """
         
         with gr.Blocks(
             css=custom_css,
-            title="Lumos AI - Data Intelligence Assistant",
-            theme=gr.themes.Soft()
+            title="MECCA Data Team AI Assistant",
+            theme=gr.themes.Soft(),
+            fill_height=True
         ) as interface:
             
-            # Header
+            # Header with branding
             gr.HTML("""
-            <div class="main-header">
-                <h1>🤖 Lumos AI - Data Intelligence Assistant</h1>
-                <p>Powered by AWS Bedrock | Multi-Agent System for Data Operations</p>
+            <div class="header-section">
+                <div class="header-title">MECCA Data Team AI Assistant (Prototype)</div>
+                <div class="header-subtitle">Intelligent data operations powered by AWS Bedrock Claude 3.5 Sonnet</div>
+                <div class="powered-by">
+                    <span>🔗 AWS Bedrock</span>
+                    <span>🚀 Lumos AI</span>
+                    <span>🏗️ dbt Cloud</span>
+                    <span>📊 Tableau REST API</span>
+                    <span>🎯 Jira API</span>
+                </div>
             </div>
             """)
             
-            with gr.Row():
-                with gr.Column(scale=3):
-                    # Chat interface
-                    chatbot = gr.Chatbot(
-                        label="💬 Conversation",
-                        height=500,
-                        show_label=True,
-                        bubble_full_width=False,
+            with gr.Row(elem_classes=["main-row"]):
+                with gr.Column(scale=6, elem_classes=["chat-column"]):
+                    with gr.Column(elem_classes=["chat-area"]):
+                        # Main chat interface
+                        chatbot = gr.Chatbot(
+                            height="calc(100vh - 250px)",
+                            show_label=False,
+                            container=False,
+                            bubble_full_width=False,
+                            type="messages"
+                        )
+                        
+                        # Message input area
+                        with gr.Row(elem_classes=["input-area"]):
+                            msg = gr.Textbox(
+                                placeholder="Ask about data, analytics, dbt models, Tableau users, or create Jira issues...",
+                                lines=1,
+                                max_lines=5,
+                                show_label=False,
+                                container=False,
+                                submit_btn=True,
+                                scale=10
+                            )
+                
+                with gr.Column(scale=4, elem_classes=["thinking-column"]):
+                    # Tool thinking panel
+                    gr.HTML('<h4 style="margin: 0 0 10px 0; color: #1e3a8a;">🔧 AI Thinking Process</h4>')
+                    tool_panel = gr.HTML(
+                        '<div class="tool-panel"><p style="color: #666; font-style: italic;">Tool calls will appear here during processing...</p></div>',
+                        elem_classes=["tool-panel"]
                     )
-                    
-                    msg = gr.Textbox(
-                        label="Your Message",
-                        placeholder="Ask me about data, analytics, Tableau users, or anything else... (Press Enter to send, Shift+Enter for new line)",
-                        lines=3,
-                        max_lines=10,
-                        submit_btn=True
-                    )
-                    
-                    # Example queries
-                    gr.Examples(
-                        examples=[
-                            "Show me all Tableau users",
-                            "List all dbt models in the mart layer",
-                            "What metrics are available in our semantic layer?",
-                            "Create a Jira issue for data quality improvements",
-                            "Export user data to CSV",
-                            "Run dbt tests for the marketing models"
-                        ],
-                        inputs=msg,
-                        label="💡 Example Queries"
-                    )
-                    
-                with gr.Column(scale=1):
-                    # Agent selection
-                    agent_choice = gr.Dropdown(
-                        choices=[
-                            "Data Manager (Coordinator)",
-                            "Data Analyst", 
-                            "Data Engineer",
-                            "Tableau Admin",
-                            "Data Admin"
-                        ],
-                        value="Data Manager (Coordinator)",
-                        label="🎯 Select Agent",
-                        info="Choose which specialist to talk to"
-                    )
-                    
-                    # Agent information
-                    gr.HTML("""
-                    <div class="agent-info">
-                        <h3>🧠 Agent Roles:</h3>
-                        <ul>
-                            <li><strong>Data Manager:</strong> Coordinates all agents and handles complex workflows</li>
-                            <li><strong>Data Analyst:</strong> Semantic layer queries and data insights</li>
-                            <li><strong>Data Engineer:</strong> dbt projects and data pipelines</li>
-                            <li><strong>Tableau Admin:</strong> User management and site administration</li>
-                            <li><strong>Data Admin:</strong> Jira project management and issue tracking</li>
-                        </ul>
-                    </div>
-                    """)
-                    
-                    # Clear conversation
-                    clear_btn = gr.Button("🗑️ Clear Conversation", variant="secondary")
-                    
-                    # System status
-                    gr.HTML("""
-                    <div class="agent-info">
-                        <h3>📊 System Status:</h3>
-                        <p>✅ AWS Bedrock Connected<br>
-                        ✅ All Agents Online<br>
-                        ✅ Tools Available</p>
-                    </div>
-                    """)
+            
+            # Hidden agent selection (defaults to data manager)  
+            agent_choice = gr.State(value="Data Manager (Coordinator)")
             
             # Event handlers
-            def submit_message(message, history, agent):
+            def submit_message(message, history):
                 if message.strip():
-                    return self.sync_chat(message, history, agent)
-                return history, message
-            
-            def clear_conversation():
-                return [], ""
+                    new_history, empty_msg = self.sync_chat(message, history, "Data Manager (Coordinator)")
+                    # Update tool panel with recent activity
+                    tool_html = self.get_recent_tool_calls()
+                    return new_history, empty_msg, tool_html
+                return history, message, tool_panel.value
             
             # Bind events
             msg.submit(
                 submit_message,
-                inputs=[msg, chatbot, agent_choice],
-                outputs=[chatbot, msg]
-            )
-            
-            clear_btn.click(
-                clear_conversation,
-                outputs=[chatbot, msg]
+                inputs=[msg, chatbot],
+                outputs=[chatbot, msg, tool_panel]
             )
         
         return interface
+    
+    def get_recent_tool_calls(self):
+        """Generate HTML for recent tool calls (placeholder for now)."""
+        return """
+        <div class="tool-panel">
+            <div class="tool-call">
+                <div class="tool-name">🤖 agent_coordinator</div>
+                <div class="tool-args">Analyzing user request...</div>
+            </div>
+            <div class="tool-call">
+                <div class="tool-name">🔍 data_analyst_agent</div>
+                <div class="tool-args">Processing data query...</div>
+            </div>
+            <div class="tool-call">
+                <div class="tool-name">📊 get_tableau_users</div>
+                <div class="tool-args">limit=50, active_only=true</div>
+            </div>
+            <div class="tool-call">
+                <div class="tool-name">✅ export_to_csv</div>
+                <div class="tool-args">filename="users_export.csv"</div>
+            </div>
+        </div>
+        """
 
     def launch(self, **kwargs):
         """Launch the Gradio interface."""

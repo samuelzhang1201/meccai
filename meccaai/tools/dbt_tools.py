@@ -379,7 +379,28 @@ class DBTCloudDiscoveryAPI:
     """dbt Cloud Discovery API client."""
     
     def __init__(self):
-        self.base_url = "https://metadata.cloud.getdbt.com/graphql"
+        # Use the API base from environment variables (required)
+        api_base = getattr(settings, 'api_base', None)
+        
+        if not api_base:
+            raise ValueError("API_BASE environment variable must be set")
+        
+        # Convert the dbt host URL to the correct metadata API endpoint
+        if 'au.dbt.com' in api_base:
+            # Australian dbt Cloud uses the Australian metadata endpoint
+            self.base_url = "https://metadata.au.dbt.com/graphql"
+        elif 'cloud.getdbt.com' in api_base or 'getdbt.com' in api_base:
+            # US/Global dbt Cloud
+            self.base_url = "https://metadata.cloud.getdbt.com/graphql"
+        else:
+            # For any other API base, try to construct the metadata URL
+            # Replace 'dbt.com' with 'dbt.com' and add metadata prefix
+            base_domain = api_base.replace('https://', '').replace('http://', '')
+            if 'au.dbt.com' in base_domain:
+                self.base_url = "https://metadata.au.dbt.com/graphql"
+            else:
+                self.base_url = f"https://metadata.{base_domain}/graphql"
+        
         self.token = getattr(settings, 'dbt_cloud_token', None)
         self.environment_id = getattr(settings, 'dbt_environment_id', None)
     
@@ -406,6 +427,13 @@ class DBTCloudDiscoveryAPI:
             )
             
             logger.info(f"dbt Discovery API response status: {response.status_code}")
+            
+            # Log response details for debugging
+            if response.status_code != 200:
+                logger.error(f"Response status: {response.status_code}")
+                logger.error(f"Response headers: {response.headers}")
+                logger.error(f"Response content: {response.text}")
+            
             response.raise_for_status()
             
             return response.json()
@@ -452,9 +480,7 @@ async def list_dbt_test_info(environment_id: Optional[str] = None, limit: int = 
                       executeStartedAt
                       executionTime
                     }
-                    tags {
-                      value
-                    }
+                    tags
                   }
                 }
                 pageInfo {
