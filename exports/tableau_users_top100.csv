@@ -1,0 +1,3 @@
+auth_type,last_login,site_role,username
+SAML,2025-01-15,Creator,user1@mecca.com.au
+SAML,2025-01-14,Viewer,user2@mecca.com.au

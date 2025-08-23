@@ -1,7 +1,6 @@
 """Tableau REST API tools for data visualization and reporting."""
 
-import base64
-import xml.etree.ElementTree as ET
+import json
 from typing import Any
 from urllib.parse import urljoin
 
@@ -42,53 +41,59 @@ class TableauAuthManager:
             f"Using token name: {self.token_name}, site: {self.site_content_url}"
         )
 
-        # Use XML format as required by Tableau REST API
-        signin_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
-<tsRequest>
-    <credentials personalAccessTokenName="{self.token_name}" personalAccessTokenSecret="{self.token_value}">
-        <site contentUrl="{self.site_content_url}" />
-    </credentials>
-</tsRequest>"""
+        # Use JSON format for Tableau REST API authentication
+        signin_payload = {
+            "credentials": {
+                "personalAccessTokenName": self.token_name,
+                "personalAccessTokenSecret": self.token_value,
+                "site": {"contentUrl": self.site_content_url},
+            }
+        }
 
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     signin_url,
-                    content=signin_xml,
-                    headers={"Content-Type": "application/xml"},
+                    json=signin_payload,
+                    headers={
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                    },
+                )
+
+                # Log response status code
+                logger.info(
+                    f"Tableau API signin response status: {response.status_code}"
                 )
                 response.raise_for_status()
 
-                # Parse XML response
-                root = ET.fromstring(response.text)
-                logger.debug(f"XML Response: {response.text[:200]}...")
+                # Parse JSON response
+                data = response.json()
+                logger.debug(f"JSON Response: {str(data)[:200]}...")
 
-                # Define namespace for Tableau API
-                ns = {"ts": "http://tableau.com/api"}
-
-                # Find credentials element with correct namespace
-                credentials = root.find("ts:credentials", ns)
-                if credentials is None:
-                    logger.error(f"Could not find credentials in XML: {response.text}")
+                # Extract credentials from JSON response
+                credentials = data.get("credentials", {})
+                if not credentials:
+                    logger.error(f"Could not find credentials in JSON: {data}")
                     raise ValueError("Could not find credentials in response")
 
-                # Get session token from credentials attributes
+                # Get session token from credentials
                 self.session_token = credentials.get("token")
                 logger.debug(
                     f"Session token: {self.session_token[:10] if self.session_token else None}..."
                 )
 
-                # Find site and user elements as children of credentials
-                site = credentials.find("ts:site", ns)
-                user = credentials.find("ts:user", ns)
+                # Get site and user information
+                site = credentials.get("site", {})
+                user = credentials.get("user", {})
 
-                if site is not None:
+                if site:
                     self.site_id = site.get("id")
                     logger.debug(f"Site ID: {self.site_id}")
                 else:
                     logger.error("Site element not found in credentials")
 
-                if user is not None:
+                if user:
                     self.user_id = user.get("id")
                     logger.debug(f"User ID: {self.user_id}")
                 else:
@@ -107,7 +112,7 @@ class TableauAuthManager:
             )
             raise ValueError(
                 f"Tableau authentication failed: {e.response.status_code}. Check your token and site settings."
-            )
+            ) from e
 
     async def sign_out(self) -> bool:
         """Sign out from Tableau Server."""
@@ -124,6 +129,11 @@ class TableauAuthManager:
                         "X-Tableau-Auth": self.session_token,
                         "Content-Type": "application/json",
                     },
+                )
+
+                # Log response status code
+                logger.info(
+                    f"Tableau API signout response status: {response.status_code}"
                 )
                 response.raise_for_status()
 
@@ -144,7 +154,7 @@ class TableauAuthManager:
 
         return {
             "X-Tableau-Auth": self.session_token,
-            "Accept": "application/xml",
+            "Accept": "application/json",
         }
 
     async def get_current_user(self) -> str | None:
@@ -163,14 +173,18 @@ class TableauAuthManager:
                 response = await client.get(
                     current_user_url, headers=self.get_auth_headers()
                 )
+
+                # Log response status code
+                logger.info(
+                    f"Tableau API get_current_user response status: {response.status_code}"
+                )
                 response.raise_for_status()
 
-                # Parse XML response
-                root = ET.fromstring(response.text)
-                ns = {"ts": "http://tableau.com/api"}
-                user = root.find(".//ts:user", ns) or root.find(".//user")
+                # Parse JSON response
+                data = response.json()
+                user = data.get("user", {})
 
-                if user is not None:
+                if user:
                     user_id = user.get("id")
                     logger.debug(f"Retrieved current user ID: {user_id}")
                     return user_id
@@ -221,40 +235,44 @@ async def list_all_personal_access_tokens() -> ToolResult:
         page_number = 1
         page_size = 100
 
-        async with httpx.AsyncClient() as client:
+        # Configure timeout
+        timeout = httpx.Timeout(60.0)  # 60 second timeout
+        async with httpx.AsyncClient(timeout=timeout) as client:
             while True:
                 params = {"pageSize": page_size, "pageNumber": page_number}
 
                 response = await client.get(
                     url, params=params, headers=auth_manager.get_auth_headers()
                 )
+
+                # Log response status code
+                logger.info(
+                    f"Tableau API list_pats response status: {response.status_code}"
+                )
                 response.raise_for_status()
 
-                # Parse XML response
-                root = ET.fromstring(response.text)
-                ns = {"ts": "http://tableau.com/api"}
+                # Parse JSON response
+                data = response.json()
 
-                # Find personalAccessTokens element
-                pats_element = root.find("ts:personalAccessTokens", ns)
-                if pats_element is None:
-                    logger.warning("No personalAccessTokens element found in response")
+                # Find personalAccessTokens data
+                pats_data = data.get("personalAccessTokens", {})
+                if not pats_data:
+                    logger.warning("No personalAccessTokens data found in response")
                     break
 
                 # Find all personalAccessToken elements
-                tokens = pats_element.findall("ts:personalAccessToken", ns)
+                tokens = pats_data.get("personalAccessToken", [])
+                if not isinstance(tokens, list):
+                    tokens = [tokens] if tokens else []
 
-                # Convert XML elements to dictionaries
-                for token in tokens:
-                    token_data = {}
-                    token_data.update(token.attrib)  # Get all attributes
-                    all_tokens.append(token_data)
+                # Add token data to results
+                all_tokens.extend(tokens)
 
-                # Check pagination from the personalAccessTokens element
-                total_available_attr = pats_element.get("totalAvailable")
-                if total_available_attr:
-                    total_available = int(total_available_attr)
-                    if page_number * page_size >= total_available:
-                        break
+                # Check pagination
+                pagination = pats_data.get("pagination", {})
+                total_available = int(pagination.get("totalAvailable", 0))
+                if page_number * page_size >= total_available:
+                    break
                 else:
                     # No pagination info, assume this is all tokens
                     break
@@ -264,25 +282,32 @@ async def list_all_personal_access_tokens() -> ToolResult:
         # Sign out
         await auth_manager.sign_out()
 
-        return ToolResult(
-            success=True, result={"total_tokens": len(all_tokens), "tokens": all_tokens}
-        )
+        return {"total_tokens": len(all_tokens), "tokens": all_tokens}
 
     except Exception as e:
         await auth_manager.sign_out()  # Ensure cleanup
         logger.error(f"Error listing PATs: {e}")
-        return ToolResult(success=False, error=str(e))
+        raise e
 
 
-@tool("get_view")
-async def get_view(view_id: str) -> ToolResult:
-    """Get details of a specific Tableau view by its ID.
+# User Management Tools
+
+
+@tool("add_user_to_site")
+async def add_user_to_site(
+    username: str,
+    site_role: str = "Viewer",
+    auth_setting: str = "ServerDefault",
+) -> ToolResult:
+    """Add a user to the site.
 
     Args:
-        view_id: The unique identifier for the view
+        username: The username for the new user
+        site_role: Site role for the user (Creator, Explorer, Viewer, etc.)
+        auth_setting: Authentication setting (ServerDefault, SAML, etc.)
 
     Returns:
-        ToolResult: View details including name, description, workbook info, etc.
+        ToolResult: Details of the created user
     """
     auth_manager = TableauAuthManager()
 
@@ -293,39 +318,66 @@ async def get_view(view_id: str) -> ToolResult:
         # Build the API endpoint URL
         url = urljoin(
             auth_manager.server_url,
-            f"/api/{auth_manager.api_version}/sites/{auth_manager.site_id}/views/{view_id}",
+            f"/api/{auth_manager.api_version}/sites/{auth_manager.site_id}/users",
         )
+
+        # Prepare JSON payload
+        user_payload = {
+            "user": {
+                "name": username,
+                "siteRole": site_role,
+                "authSetting": auth_setting,
+            }
+        }
 
         async with httpx.AsyncClient() as client:
-            response = await client.get(url, headers=auth_manager.get_auth_headers())
+            response = await client.post(
+                url,
+                json=user_payload,
+                headers={
+                    **auth_manager.get_auth_headers(),
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                },
+            )
+
+            # Log response status code
+            logger.info(
+                f"Tableau API add_user_to_site response status: {response.status_code}"
+            )
             response.raise_for_status()
 
+            # Parse JSON response
             data = response.json()
-            view = data["tsResponse"]["view"]
+            user_element = data.get("user", {})
+
+            if user_element:
+                user_data = {
+                    "id": user_element.get("id"),
+                    "name": user_element.get("name"),
+                    "siteRole": user_element.get("siteRole"),
+                    "authSetting": user_element.get("authSetting"),
+                }
+            else:
+                user_data = {"message": "User created successfully"}
 
         # Sign out
         await auth_manager.sign_out()
 
-        return ToolResult(success=True, result=view)
+        return user_data
 
     except Exception as e:
         await auth_manager.sign_out()  # Ensure cleanup
-        logger.error(f"Error getting view {view_id}: {e}")
-        return ToolResult(success=False, error=str(e))
+        logger.error(f"Error adding user {username} to site: {e}")
+        raise e
 
 
-@tool("query_view_pdf")
-async def query_view_pdf(
-    view_id: str, filter_params: dict[str, Any] | None = None
-) -> ToolResult:
-    """Export a Tableau view as PDF.
-
-    Args:
-        view_id: The unique identifier for the view
-        filter_params: Optional dictionary of filter parameters to apply
+@tool("get_users_on_site")
+async def get_users_on_site() -> ToolResult:
+    """Get all users on the site.
 
     Returns:
-        ToolResult: Base64-encoded PDF content or download URL
+        ToolResult: List of all users with their details
     """
     auth_manager = TableauAuthManager()
 
@@ -336,98 +388,42 @@ async def query_view_pdf(
         # Build the API endpoint URL
         url = urljoin(
             auth_manager.server_url,
-            f"/api/{auth_manager.api_version}/sites/{auth_manager.site_id}/views/{view_id}/pdf",
+            f"/api/{auth_manager.api_version}/sites/{auth_manager.site_id}/users",
         )
-
-        # Prepare query parameters
-        params = {}
-        if filter_params:
-            for key, value in filter_params.items():
-                params[f"vf_{key}"] = value
-
-        async with httpx.AsyncClient(
-            timeout=120.0
-        ) as client:  # Longer timeout for PDF generation
-            response = await client.get(
-                url, params=params, headers=auth_manager.get_auth_headers()
-            )
-            response.raise_for_status()
-
-            # Encode PDF content as base64 for JSON serialization
-            pdf_content = base64.b64encode(response.content).decode("utf-8")
-
-        # Sign out
-        await auth_manager.sign_out()
-
-        return ToolResult(
-            success=True,
-            result={
-                "view_id": view_id,
-                "pdf_size_bytes": len(response.content),
-                "pdf_base64": pdf_content,
-                "content_type": response.headers.get("content-type", "application/pdf"),
-            },
-        )
-
-    except Exception as e:
-        await auth_manager.sign_out()  # Ensure cleanup
-        logger.error(f"Error exporting view {view_id} to PDF: {e}")
-        return ToolResult(success=False, error=str(e))
-
-
-@tool("list_views")
-async def list_views(workbook_id: str | None = None) -> ToolResult:
-    """List all views in the site, optionally filtered by workbook.
-
-    Args:
-        workbook_id: Optional workbook ID to filter views
-
-    Returns:
-        ToolResult: List of views with details
-    """
-    auth_manager = TableauAuthManager()
-
-    try:
-        # Sign in
-        await auth_manager.sign_in()
-
-        # Build the API endpoint URL
-        if workbook_id:
-            url = urljoin(
-                auth_manager.server_url,
-                f"/api/{auth_manager.api_version}/sites/{auth_manager.site_id}/workbooks/{workbook_id}/views",
-            )
-        else:
-            url = urljoin(
-                auth_manager.server_url,
-                f"/api/{auth_manager.api_version}/sites/{auth_manager.site_id}/views",
-            )
 
         # Make the API request with pagination support
-        all_views = []
+        all_users = []
         page_number = 1
-        page_size = 100
+        page_size = 100  # Smaller page size to avoid timeout
 
-        async with httpx.AsyncClient() as client:
+        # Configure timeout
+        timeout = httpx.Timeout(60.0)  # 60 second timeout
+        async with httpx.AsyncClient(timeout=timeout) as client:
             while True:
                 params = {"pageSize": page_size, "pageNumber": page_number}
 
                 response = await client.get(
                     url, params=params, headers=auth_manager.get_auth_headers()
                 )
+
+                # Log response status code
+                logger.info(f"Tableau API response status: {response.status_code}")
                 response.raise_for_status()
 
                 data = response.json()
-                views = data["tsResponse"]["views"]["view"]
+                
+                # Extract users data
+                users_data = data.get("users", {})
+                if "user" in users_data:
+                    users = users_data["user"]
+                    if isinstance(users, list):
+                        all_users.extend(users)
+                    elif users:  # Single user
+                        all_users.append(users)
 
-                if isinstance(views, list):
-                    all_views.extend(views)
-                elif views:  # Single view
-                    all_views.append(views)
-
-                # Check if there are more pages
-                pagination = data["tsResponse"]["views"]["pagination"]
-                total_available = int(pagination["totalAvailable"])
+                # Check pagination from top level
+                pagination = data.get("pagination", {})
+                total_available = int(pagination.get("totalAvailable", 0))
 
                 if page_number * page_size >= total_available:
                     break
@@ -437,11 +433,246 @@ async def list_views(workbook_id: str | None = None) -> ToolResult:
         # Sign out
         await auth_manager.sign_out()
 
-        return ToolResult(
-            success=True, result={"total_views": len(all_views), "views": all_views}
-        )
+        return {"total_users": len(all_users), "users": all_users}
 
     except Exception as e:
         await auth_manager.sign_out()  # Ensure cleanup
-        logger.error(f"Error listing views: {e}")
-        return ToolResult(success=False, error=str(e))
+        logger.error(f"Error getting users on site: {e}")
+        raise e
+
+
+@tool("get_users_in_group")
+async def get_users_in_group(group_id: str) -> ToolResult:
+    """Get all users in a specific group.
+
+    Args:
+        group_id: The ID of the group
+
+    Returns:
+        ToolResult: List of users in the group
+    """
+    auth_manager = TableauAuthManager()
+
+    try:
+        # Sign in
+        await auth_manager.sign_in()
+
+        # Build the API endpoint URL
+        url = urljoin(
+            auth_manager.server_url,
+            f"/api/{auth_manager.api_version}/sites/{auth_manager.site_id}/groups/{group_id}/users",
+        )
+
+        # Make the API request with pagination support
+        all_users = []
+        page_number = 1
+        page_size = 100  # Smaller page size to avoid timeout
+
+        # Configure timeout
+        timeout = httpx.Timeout(60.0)  # 60 second timeout
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            while True:
+                params = {"pageSize": page_size, "pageNumber": page_number}
+
+                response = await client.get(
+                    url, params=params, headers=auth_manager.get_auth_headers()
+                )
+
+                # Log response status code
+                logger.info(f"Tableau API response status: {response.status_code}")
+                response.raise_for_status()
+
+                data = response.json()
+                
+                # Extract users data
+                users_data = data.get("users", {})
+                if "user" in users_data:
+                    users = users_data["user"]
+                    if isinstance(users, list):
+                        all_users.extend(users)
+                    elif users:  # Single user
+                        all_users.append(users)
+
+                # Check pagination from top level
+                pagination = data.get("pagination", {})
+                total_available = int(pagination.get("totalAvailable", 0))
+
+                if page_number * page_size >= total_available:
+                    break
+
+                page_number += 1
+
+        # Sign out
+        await auth_manager.sign_out()
+
+        return {
+            "group_id": group_id,
+            "total_users": len(all_users),
+            "users": all_users,
+        }
+
+    except Exception as e:
+        await auth_manager.sign_out()  # Ensure cleanup
+        logger.error(f"Error getting users in group {group_id}: {e}")
+        raise e
+
+
+@tool("get_group_set")
+async def get_group_set() -> ToolResult:
+    """Get all groups on the site.
+
+    Returns:
+        ToolResult: List of all groups with their details
+    """
+    auth_manager = TableauAuthManager()
+
+    try:
+        # Sign in
+        await auth_manager.sign_in()
+
+        # Build the API endpoint URL
+        url = urljoin(
+            auth_manager.server_url,
+            f"/api/{auth_manager.api_version}/sites/{auth_manager.site_id}/groups",
+        )
+
+        # Make the API request with pagination support
+        all_groups = []
+        page_number = 1
+        page_size = 100  # Smaller page size to avoid timeout
+
+        # Configure timeout
+        timeout = httpx.Timeout(60.0)  # 60 second timeout
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            while True:
+                params = {"pageSize": page_size, "pageNumber": page_number}
+
+                response = await client.get(
+                    url, params=params, headers=auth_manager.get_auth_headers()
+                )
+
+                # Log response status code
+                logger.info(f"Tableau API response status: {response.status_code}")
+                response.raise_for_status()
+
+                data = response.json()
+                
+                # Extract groups data
+                groups_data = data.get("groups", {})
+                if "group" in groups_data:
+                    groups = groups_data["group"]
+                    if isinstance(groups, list):
+                        all_groups.extend(groups)
+                    elif groups:  # Single group
+                        all_groups.append(groups)
+
+                # Check pagination from top level
+                pagination = data.get("pagination", {})
+                total_available = int(pagination.get("totalAvailable", 0))
+
+                if page_number * page_size >= total_available:
+                    break
+
+                page_number += 1
+
+        # Sign out
+        await auth_manager.sign_out()
+
+        return {"total_groups": len(all_groups), "groups": all_groups}
+
+    except Exception as e:
+        await auth_manager.sign_out()  # Ensure cleanup
+        logger.error(f"Error getting group set: {e}")
+        raise e
+
+
+@tool("update_user")
+async def update_user(
+    user_id: str,
+    site_role: str | None = None,
+    auth_setting: str | None = None,
+    full_name: str | None = None,
+    email: str | None = None,
+) -> ToolResult:
+    """Update a user on the site.
+
+    Args:
+        user_id: The ID of the user to update
+        site_role: New site role for the user (optional)
+        auth_setting: New authentication setting (optional)
+        full_name: New full name for the user (optional)
+        email: New email address for the user (optional)
+
+    Returns:
+        ToolResult: Updated user details
+    """
+    auth_manager = TableauAuthManager()
+
+    try:
+        # Sign in
+        await auth_manager.sign_in()
+
+        # Build the API endpoint URL
+        url = urljoin(
+            auth_manager.server_url,
+            f"/api/{auth_manager.api_version}/sites/{auth_manager.site_id}/users/{user_id}",
+        )
+
+        # Prepare JSON payload with only provided fields
+        user_data = {}
+        if site_role:
+            user_data["siteRole"] = site_role
+        if auth_setting:
+            user_data["authSetting"] = auth_setting
+        if full_name:
+            user_data["fullName"] = full_name
+        if email:
+            user_data["email"] = email
+
+        if not user_data:
+            raise ValueError("No fields provided to update")
+
+        user_payload = {"user": user_data}
+
+        async with httpx.AsyncClient() as client:
+            response = await client.put(
+                url,
+                json=user_payload,
+                headers={
+                    **auth_manager.get_auth_headers(),
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                },
+            )
+
+            # Log response status code
+            logger.info(
+                f"Tableau API update_user response status: {response.status_code}"
+            )
+            response.raise_for_status()
+
+            # Parse JSON response
+            data = response.json()
+            user_element = data.get("user", {})
+
+            if user_element:
+                user_data = {
+                    "id": user_element.get("id"),
+                    "name": user_element.get("name"),
+                    "siteRole": user_element.get("siteRole"),
+                    "authSetting": user_element.get("authSetting"),
+                    "fullName": user_element.get("fullName"),
+                    "email": user_element.get("email"),
+                }
+            else:
+                user_data = {"message": "User updated successfully"}
+
+        # Sign out
+        await auth_manager.sign_out()
+
+        return user_data
+
+    except Exception as e:
+        await auth_manager.sign_out()  # Ensure cleanup
+        logger.error(f"Error updating user {user_id}: {e}")
+        raise e

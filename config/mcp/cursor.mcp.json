@@ -8,6 +8,10 @@
         "dbt-mcp"
       ],
       "timeout": 300
+    },
+    "jira-mcp": {
+      "command": "/Users/yumengzhang/.local/bin/uvx",
+      "args": ["jira-mcp"]
     }
   }
 }

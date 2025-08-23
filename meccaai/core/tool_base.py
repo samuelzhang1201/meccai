@@ -50,9 +50,10 @@ class BaseTool:
                 result=result,
             )
         except Exception as e:
+            error_msg = str(e) if str(e) else f"{type(e).__name__}: {repr(e)}"
             return ToolResult(
                 success=False,
-                error=str(e),
+                error=error_msg,
             )
 
     def _generate_schema(self) -> dict[str, Any]:

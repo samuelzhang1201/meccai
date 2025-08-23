@@ -99,7 +99,7 @@ async def _interactive_chat():
 
     click.echo("🤖 Welcome to Lumos AI Interactive Chat with AWS Bedrock!")
     click.echo(
-        "Available agents: data_analyst, data_manager, list_metrics, query_metrics, tableau"
+        "Available agents: data_analyst, data_engineer, tableau_admin, data_admin, data_manager"
     )
     click.echo("Type 'help' for commands, 'quit' or 'exit' to end the session.\\n")
 

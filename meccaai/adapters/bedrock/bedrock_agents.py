@@ -1,6 +1,5 @@
 """Bedrock-compatible agents that work with AWS Bedrock models."""
 
-
 from meccaai.adapters.bedrock.bedrock_runner import BedrockRunner
 from meccaai.core.config import settings
 from meccaai.core.logging import get_logger

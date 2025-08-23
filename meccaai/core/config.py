@@ -36,18 +36,12 @@ class ModelConfig(BaseModel):
 
 
 class ModelsConfig(BaseModel):
-    """Multi-provider model configuration."""
+    """Bedrock-only model configuration."""
 
-    default_provider: str = "openai"
-    openai: ModelConfig = Field(
-        default_factory=lambda: ModelConfig(model="gpt-4o-mini")
-    )
-    anthropic: ModelConfig = Field(
-        default_factory=lambda: ModelConfig(model="claude-3-sonnet-20240229")
-    )
+    default_provider: str = "bedrock"
     bedrock: ModelConfig = Field(
         default_factory=lambda: ModelConfig(
-            model="anthropic.claude-3-5-sonnet-20241022-v2:0"
+            model="apac.anthropic.claude-3-5-sonnet-20241022-v2:0"
         )
     )
 
@@ -97,7 +91,7 @@ class TableauConfig(BaseModel):
 class BedrockConfig(BaseModel):
     """AWS Bedrock configuration."""
 
-    aws_region: str = Field(default="us-east-1")
+    aws_region: str = Field(default="ap-southeast-2")
     aws_access_key_id: str | None = Field(default=None)
     aws_secret_access_key: str | None = Field(default=None)
     aws_session_token: str | None = Field(default=None)
@@ -116,17 +110,15 @@ class Settings(BaseSettings):
     # Environment
     environment: str = Field(default="dev", alias="ENVIRONMENT")
 
-    # API Keys
-    openai_api_key: str | None = Field(default=None, alias="OPENAI_API_KEY")
-    anthropic_api_key: str | None = Field(default=None, alias="ANTHROPIC_API_KEY")
+    # API Keys (Bedrock only)
     tableau_token_value: str | None = Field(default=None, alias="TABLEAU_TOKEN_VALUE")
 
-    # AWS Bedrock Keys
+    # AWS Configuration (for Bedrock)
     aws_access_key_id: str | None = Field(default=None, alias="AWS_ACCESS_KEY_ID")
     aws_secret_access_key: str | None = Field(
         default=None, alias="AWS_SECRET_ACCESS_KEY"
     )
-    aws_region: str = Field(default="us-east-1", alias="AWS_REGION")
+    aws_region: str = Field(default="ap-southeast-2", alias="AWS_REGION")
 
     # Configuration sections
     app: AppConfig = Field(default_factory=AppConfig)

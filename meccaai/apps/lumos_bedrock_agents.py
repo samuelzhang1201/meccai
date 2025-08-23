@@ -3,11 +3,7 @@
 from meccaai.adapters.bedrock.bedrock_agents import BedrockAgent, BedrockAgentSystem
 from meccaai.core.logging import get_logger
 from meccaai.prompts.loader import get_tool_description
-from meccaai.tools import (
-    dbt_tools,
-    self_intro,
-    tableau_tools,
-)
+from meccaai.tools import atlassian_tools, dbt_tools, export_tools, self_intro, tableau_tools
 
 logger = get_logger(__name__)
 
@@ -30,214 +26,289 @@ def load_tool_agent_prompt(tool_type: str) -> str:
 
     # Fallback to default instructions
     instruction_map = {
-        "list_metrics": "You specialize in listing all available metrics from the dbt Semantic Layer.",
-        "get_dimensions": "You specialize in retrieving dimensions for specified metrics from the dbt Semantic Layer.",
-        "get_entities": "You specialize in retrieving entities for specified metrics from the dbt Semantic Layer.",
-        "query_metrics": "You specialize in querying the dbt Semantic Layer to answer business questions using metrics.",
-        "tableau": "You are a Tableau specialist agent for dashboard and visualization operations.",
+        "data_analyst": "You are a Data Analyst specialized in semantic layer queries and data insights.",
+        "data_engineer": "You are a Data Engineer specialized in dbt project management and discovery.",
+        "tableau_admin": "You are a Tableau Administrator specialized in user management and administration.",
+        "data_admin": "You are a Data Administrator specialized in project management using Jira.",
+        "data_manager": "You are a Data Manager responsible for workflow automation and coordinating other agents.",
     }
     return instruction_map.get(tool_type, f"You are a {tool_type} specialist agent.")
 
 
-# Create DBT Semantic Layer Agents
-def create_list_metrics_agent() -> BedrockAgent:
-    """Create list_metrics specialist agent."""
-    prompt = load_tool_agent_prompt("list_metrics")
-    return BedrockAgent(
-        name="list_metrics_agent",
-        instructions=prompt,
-        tools=[dbt_tools.list_metrics],
-    )
-
-
-def create_get_dimensions_agent() -> BedrockAgent:
-    """Create get_dimensions specialist agent."""
-    prompt = load_tool_agent_prompt("get_dimensions")
-    return BedrockAgent(
-        name="get_dimensions_agent",
-        instructions=prompt,
-        tools=[dbt_tools.get_dimensions],
-    )
-
-
-def create_get_entities_agent() -> BedrockAgent:
-    """Create get_entities specialist agent."""
-    prompt = load_tool_agent_prompt("get_entities")
-    return BedrockAgent(
-        name="get_entities_agent",
-        instructions=prompt,
-        tools=[dbt_tools.get_entities],
-    )
-
-
-def create_query_metrics_agent() -> BedrockAgent:
-    """Create query_metrics specialist agent."""
-    prompt = load_tool_agent_prompt("query_metrics")
-    return BedrockAgent(
-        name="query_metrics_agent",
-        instructions=prompt,
-        tools=[dbt_tools.query_metrics],
-    )
-
-
-def create_get_metrics_compiled_sql_agent() -> BedrockAgent:
-    """Create get_metrics_compiled_sql agent (for debugging)."""
-    prompt = "You specialize in compiling SQL for metrics without executing them. This is primarily used for debugging purposes."
-    return BedrockAgent(
-        name="get_metrics_compiled_sql_agent",
-        instructions=prompt,
-        tools=[dbt_tools.get_metrics_compiled_sql],
-    )
-
-
-def create_tableau_agent() -> BedrockAgent:
-    """Create Tableau specialist agent."""
-    prompt = load_tool_agent_prompt("tableau")
-    return BedrockAgent(
-        name="tableau_agent",
-        instructions=prompt,
-        tools=[
-            tableau_tools.get_view,
-            tableau_tools.list_views,
-            tableau_tools.query_view_pdf,
-            tableau_tools.list_all_personal_access_tokens,
-        ],
-    )
-
-
-# Create tool agents
-list_metrics_agent = create_list_metrics_agent()
-get_dimensions_agent = create_get_dimensions_agent()
-get_entities_agent = create_get_entities_agent()
-query_metrics_agent = create_query_metrics_agent()
-get_metrics_compiled_sql_agent = create_get_metrics_compiled_sql_agent()
-tableau_agent = create_tableau_agent()
-
-# Convert agents to tools
-list_metrics_tool = list_metrics_agent.as_tool(
-    tool_name="list_metrics",
-    tool_description="List all available metrics from the dbt Semantic Layer",
-)
-get_dimensions_tool = get_dimensions_agent.as_tool(
-    tool_name="get_dimensions",
-    tool_description="Get dimensions for specified metrics from the dbt Semantic Layer",
-)
-get_entities_tool = get_entities_agent.as_tool(
-    tool_name="get_entities",
-    tool_description="Get entities for specified metrics from the dbt Semantic Layer",
-)
-query_metrics_tool = query_metrics_agent.as_tool(
-    tool_name="query_metrics",
-    tool_description="Query the dbt Semantic Layer to answer business questions using metrics",
-)
-get_metrics_compiled_sql_tool = get_metrics_compiled_sql_agent.as_tool(
-    tool_name="get_metrics_compiled_sql",
-    tool_description="Compile SQL for metrics without executing (debugging purposes)",
-)
-tableau_agent_tool = tableau_agent.as_tool(
-    tool_name="tableau_agent",
-    tool_description="Tableau specialist agent for dashboard and visualization operations",
-)
-
-# Main Agents System Instructions
-DATA_ANALYST_INSTRUCTIONS = """
-You are a Data Analyst AI agent specialized in data analysis, visualization, and insights generation.
-
-When you received a questions about any data insight, you should firstly consider which subject area it belongs to, and then use the dbt semantic layer tools to answer the question.
-CRITICAL: For data questions like "what is total sales amount for sales channel code L098 on 2025-08-10?":
-Follow this semantic layer workflow:
-1. Use list_metrics to find relevant metrics (like sales, revenue, etc.)
-2. Use get_dimensions and get_entities to understand available filters and groupings
-3. Use query_metrics to get the answer with proper semantic layer query
-4. If debugging is needed, use get_metrics_compiled_sql
-
-Your core responsibilities include:
-- Answering data questions using dbt semantic layer tools directly
-- Creating and managing Tableau dashboards and visualizations
-- Providing data-driven recommendations
-
-You have access to these tools:
-- list_metrics: List all available metrics from dbt Semantic Layer
-- get_dimensions: Get dimensions for specified metrics
-- get_entities: Get entities for specified metrics
-- query_metrics: Query semantic layer for business insights
-- get_metrics_compiled_sql: Debug SQL compilation (if needed)
-- tableau_agent: For dashboard and visualization operations
-
-ALWAYS start with list_metrics for data questions, then get_dimensions/get_entities, then query_metrics.
-
-Always provide clear explanations of your analysis process and findings.
-Use the self_intro tool to introduce yourself when greeting users.
-"""
-
-DATA_MANAGER_INSTRUCTIONS = """
-You are a Data Manager AI agent specialized in workflow automation, project management, and team coordination.
-
-Your core responsibilities include:
-- Managing data team workflows and processes
-- Coordinating projects and team collaboration
-- Providing project management support
-
-You work closely with the Data Analyst agent to ensure smooth data operations and team coordination.
-When users need data analysis or technical data tasks, collaborate with or refer them to the Data Analyst.
-
-Always confirm actions before making changes to workflows or project settings.
-"""
+# Agent Creation Functions
 
 
 def create_data_analyst() -> BedrockAgent:
-    """Create Data Analyst agent with guardrails."""
+    """Create Data Analyst agent with semantic layer tools."""
+    prompt = """You are a Data Analyst specialized in data analysis and semantic layer queries.
+
+    Your core responsibilities include:
+    - Analyzing data using dbt Semantic Layer tools
+    - Answering business questions with metrics and dimensions
+    - Providing data-driven insights
+
+    You have access to these semantic layer tools:
+    - list_metrics: List all available metrics from dbt Semantic Layer
+    - get_dimensions: Get dimensions for specified metrics
+    - get_entities: Get entities for specified metrics
+    - query_metrics: Query semantic layer for business insights
+
+    CRITICAL: For data questions like "what is total sales amount for sales channel code L098 on 2025-08-10?":
+    Follow this semantic layer workflow:
+    1. Use list_metrics to find relevant metrics (like sales, revenue, etc.)
+    2. Use get_dimensions and get_entities to understand available filters and groupings
+    3. Use query_metrics to get the answer with proper semantic layer query
+
+    Always start with list_metrics for data questions, then get_dimensions/get_entities, then query_metrics.
+    Always provide clear explanations of your analysis process and findings.
+    """
+
     return BedrockAgent(
         name="data_analyst",
-        instructions=DATA_ANALYST_INSTRUCTIONS,
+        instructions=prompt,
         tools=[
-            # DBT Semantic Layer tools
-            list_metrics_tool,
-            get_dimensions_tool,
-            get_entities_tool,
-            query_metrics_tool,
-            get_metrics_compiled_sql_tool,
-            # Other tools
-            tableau_agent_tool,
+            dbt_tools.list_metrics,
+            dbt_tools.get_dimensions,
+            dbt_tools.get_entities,
+            dbt_tools.query_metrics,
             self_intro.self_intro_tool,
         ],
         apply_guardrail=True,  # Enable PII protection
     )
 
 
+def create_data_engineer() -> BedrockAgent:
+    """Create Data Engineer agent with all dbt discovery tools."""
+    prompt = """You are a Data Engineer specialized in dbt project management and data pipeline operations.
+
+    Your core responsibilities include:
+    - Managing dbt projects and models
+    - Building and maintaining data transformations
+    - Model discovery and lineage analysis
+    - SQL query execution and optimization
+    - Project documentation and testing
+    - Monitoring dbt Cloud job runs and test results
+
+    You have access to comprehensive dbt tools including:
+    - Project management: build, compile, run, test, parse, docs
+    - Model discovery: get_all_models, get_mart_models, get_model_details, get_model_parents, get_model_children
+    - Data exploration: list, show, text_to_sql, execute_sql
+    - Semantic layer: get_metrics_compiled_sql (for debugging)
+    - dbt Cloud Discovery API: list_dbt_test_info, list_dbt_tests, list_job_runs, list_model_execution_time
+
+    The Discovery API tools allow you to monitor production dbt Cloud environments, check test results, analyze job runs, and review model performance metrics.
+
+    Focus on providing technical expertise for data pipeline development and maintenance.
+    """
+
+    return BedrockAgent(
+        name="data_engineer",
+        instructions=prompt,
+        tools=[
+            # dbt CLI Tools
+            dbt_tools.build,
+            dbt_tools.compile,
+            dbt_tools.run,
+            dbt_tools.test,
+            dbt_tools.parse,
+            dbt_tools.docs,
+            dbt_tools.list_resources,
+            dbt_tools.show,
+            # Discovery Tools
+            dbt_tools.get_all_models,
+            dbt_tools.get_mart_models,
+            dbt_tools.get_model_details,
+            dbt_tools.get_model_parents,
+            dbt_tools.get_model_children,
+            # SQL Tools
+            dbt_tools.text_to_sql,
+            dbt_tools.execute_sql,
+            dbt_tools.get_metrics_compiled_sql,
+            # dbt Cloud Discovery API Tools
+            dbt_tools.list_dbt_test_info,
+            dbt_tools.list_dbt_tests,
+            dbt_tools.list_job_runs,
+            dbt_tools.list_model_execution_time,
+        ],
+    )
+
+
+def create_tableau_admin() -> BedrockAgent:
+    """Create Tableau Administrator agent with user management tools."""
+    prompt = """You are a Tableau Administrator specialized in user management and site administration.
+
+    Your core responsibilities include:
+    - Managing Tableau site users and groups
+    - User provisioning and access control
+    - Site administration and security
+    - Personal access token management
+
+    You have access to these Tableau administration tools:
+    - add_user_to_site: Add new users to the site
+    - get_users_on_site: List all users on the site
+    - get_users_in_group: Get users in specific groups
+    - get_group_set: List all groups on the site
+    - update_user: Update user properties and permissions
+    - list_all_personal_access_tokens: Manage access tokens
+
+    Always confirm actions before making changes to user accounts or permissions.
+    Focus on security best practices and proper access management.
+    """
+
+    return BedrockAgent(
+        name="tableau_admin",
+        instructions=prompt,
+        tools=[
+            tableau_tools.add_user_to_site,
+            tableau_tools.get_users_on_site,
+            tableau_tools.get_users_in_group,
+            tableau_tools.get_group_set,
+            tableau_tools.update_user,
+            tableau_tools.list_all_personal_access_tokens,
+        ],
+    )
+
+
+def create_data_admin() -> BedrockAgent:
+    """Create Data Administrator agent with Jira tools."""
+    prompt = """You are a Data Administrator specialized in project management using Jira.
+
+    Your core responsibilities include:
+    - Managing Jira projects and issues
+    - Tracking data-related tasks and workflows
+    - Coordinating team collaboration through Jira
+    - Issue resolution and project tracking
+
+    You have access to these Jira management tools:
+    - search_issues: Search for issues using JQL
+    - get_issue: Get detailed information about specific issues
+    - create_issue: Create new issues for tracking tasks
+    - update_issue: Update existing issues
+    - add_comment: Add comments to issues
+    - add_attachment: Attach files to issues
+    - get_epic_children: Get tasks under epics
+
+    Focus on project organization, task tracking, and team coordination through effective issue management.
+    """
+
+    return BedrockAgent(
+        name="data_admin",
+        instructions=prompt,
+        tools=[
+            atlassian_tools.search_issues,
+            atlassian_tools.get_issue,
+            atlassian_tools.create_issue,
+            atlassian_tools.update_issue,
+            atlassian_tools.add_comment,
+            atlassian_tools.add_attachment,
+            atlassian_tools.get_epic_children,
+        ],
+    )
+
+
 def create_data_manager() -> BedrockAgent:
-    """Create Data Manager agent."""
+    """Create Data Manager agent for workflow automation and coordination."""
+    prompt = """You are a Data Manager responsible for workflow automation, project management, and coordinating other specialized agents.
+
+    Your core responsibilities include:
+    - Acting as the main point of contact for users
+    - Coordinating tasks across different agents
+    - Planning and orchestrating complex data workflows
+    - Project management and team coordination
+    - Making decisions about which agent should handle specific tasks
+    - Exporting data and results to CSV files when requested
+
+    You have access to specialized agent tools:
+    - data_analyst_agent: For semantic layer queries and data insights using dbt metrics
+    - data_engineer_agent: For dbt project management, model discovery, and data pipelines
+    - tableau_admin_agent: For Tableau user management, site administration, and permissions
+    - data_admin_agent: For Jira project management, issue tracking, and team coordination
+
+    You also have direct access to export tools:
+    - export_tableau_users_to_csv: Export actual Tableau users directly to CSV with real data
+    - export_result_to_csv: Export any data to CSV format with automatic formatting
+    - list_export_files: List all previously exported files
+    - delete_export_file: Delete specific export files
+
+    When users ask questions or request tasks:
+    1. Analyze the request to determine which specialized agent is best suited
+    2. Call the appropriate agent tool with a clear, detailed request
+    3. Present the complete, detailed results directly to the user
+    4. For complex tasks, coordinate multiple agents as needed
+    5. Always show the actual data/results, not just summaries
+
+    Examples:
+    - For "show me tableau users" → Use tableau_admin_agent and display the complete user list with all details (names, emails, roles, last login, etc.) in a formatted table
+    - For "what are our sales metrics" → Use data_analyst_agent and show all available metrics with their definitions
+    - For "run dbt models" → Use data_engineer_agent and show execution results with details
+    - For "create a jira issue" → Use data_admin_agent and show issue creation status
+    
+    CRITICAL: When displaying data from agents, always show the actual detailed information, not summaries. 
+    Present data in tables or structured format showing all available fields.
+
+    IMPORTANT: Only use CSV export tools when the user explicitly requests export/download/CSV:
+    - For "export tableau users to CSV" → Use export_tableau_users_to_csv (gets actual data directly)
+    - For "export users to CSV" → Use export_tableau_users_to_csv for Tableau users
+    - For "download data as CSV" → Use appropriate export tool based on data type
+    - For "save to file" → Use export_result_to_csv for generic data
+    
+    DO NOT offer CSV export unless specifically requested by the user.
+
+    You are the orchestrator and primary interface for users, ensuring they get the best possible service by leveraging the right expertise for each task.
+    """
+
+    # Note: We'll add the agent tools after all agents are created
     return BedrockAgent(
         name="data_manager",
-        instructions=DATA_MANAGER_INSTRUCTIONS,
-        tools=[],  # Add specific tools as needed
+        instructions=prompt,
+        tools=[
+            self_intro.self_intro_tool,
+            export_tools.export_tableau_users_to_csv,
+            export_tools.export_result_to_csv,
+            export_tools.list_export_files,
+            export_tools.delete_export_file,
+        ],
     )
 
 
 # Create main agents
 data_analyst = create_data_analyst()
+data_engineer = create_data_engineer()
+tableau_admin = create_tableau_admin()
+data_admin = create_data_admin()
 data_manager = create_data_manager()
+
+# Add other agents as tools to the data_manager
+data_manager.tools.extend(
+    [
+        data_analyst.as_tool(
+            tool_name="data_analyst_agent",
+            tool_description="Data Analyst agent for semantic layer queries, metrics analysis, and data insights using dbt Semantic Layer tools.",
+        ),
+        data_engineer.as_tool(
+            tool_name="data_engineer_agent",
+            tool_description="Data Engineer agent for dbt project management, model discovery, SQL execution, and data pipeline operations.",
+        ),
+        tableau_admin.as_tool(
+            tool_name="tableau_admin_agent",
+            tool_description="Tableau Administrator agent for user management, site administration, group management, and access control.",
+        ),
+        data_admin.as_tool(
+            tool_name="data_admin_agent",
+            tool_description="Data Administrator agent for Jira project management, issue tracking, task coordination, and team collaboration.",
+        ),
+    ]
+)
 
 
 def get_agents() -> dict[str, BedrockAgent]:
-    """Get all available agents."""
+    """Get all main agents."""
     return {
         "data_analyst": data_analyst,
+        "data_engineer": data_engineer,
+        "tableau_admin": tableau_admin,
+        "data_admin": data_admin,
         "data_manager": data_manager,
-    }
-
-
-def get_tool_agents() -> dict[str, BedrockAgent]:
-    """Get all tool agents."""
-    return {
-        # DBT Semantic Layer agents
-        "list_metrics_agent": list_metrics_agent,
-        "get_dimensions_agent": get_dimensions_agent,
-        "get_entities_agent": get_entities_agent,
-        "query_metrics_agent": query_metrics_agent,
-        "get_metrics_compiled_sql_agent": get_metrics_compiled_sql_agent,
-        # Other tool agents
-        "tableau_agent": tableau_agent,
     }
 
 
@@ -249,19 +320,15 @@ class LumosBedrockAgentSystem:
         # Add all agents to the system
         for agent in get_agents().values():
             self.system.add_agent(agent)
-        for agent in get_tool_agents().values():
-            self.system.add_agent(agent)
 
     def list_agents(self) -> dict[str, str]:
         """List all available agents with their roles."""
         return {
-            "data_analyst": "Data analysis, visualization, and insights generation",
-            "data_manager": "Workflow automation and project management",
-            "list_metrics": "List all available metrics from dbt Semantic Layer",
-            "get_dimensions": "Get dimensions for metrics from dbt Semantic Layer",
-            "get_entities": "Get entities for metrics from dbt Semantic Layer",
-            "query_metrics": "Query dbt Semantic Layer for business insights",
-            "tableau": "Tableau specialist for dashboard operations",
+            "data_analyst": "Data analysis and semantic layer queries specialist",
+            "data_engineer": "dbt project management and data pipeline specialist",
+            "tableau_admin": "Tableau user management and administration specialist",
+            "data_admin": "Jira project management and issue tracking specialist",
+            "data_manager": "Workflow automation and team coordination lead",
         }
 
     async def process_request(
@@ -271,7 +338,14 @@ class LumosBedrockAgentSystem:
         workflow: bool = False,
     ):
         """Process a request using the specified agent or workflow."""
-        return await self.system.process_request(messages, agent, workflow)
+        # Default to data_manager if no agent specified - they will coordinate
+        target_agent = (
+            agent if agent and agent in self.system.agents else "data_manager"
+        )
+
+        return await self.system.process_request(
+            messages, agent=target_agent, workflow=workflow
+        )
 
 
 if __name__ == "__main__":
@@ -279,5 +353,5 @@ if __name__ == "__main__":
     agents = get_agents()
     print("Available Bedrock agents:", list(agents.keys()))
 
-    tool_agents = get_tool_agents()
-    print("Available tool agents:", list(tool_agents.keys()))
+    system = LumosBedrockAgentSystem()
+    print("Agent roles:", system.list_agents())

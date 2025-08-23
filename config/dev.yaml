@@ -3,9 +3,7 @@ app:
   debug: true
 
 models:
-  openai:
-    temperature: 0.2
-  anthropic:
+  bedrock:
     temperature: 0.2
 
 # Enable telemetry in dev for testing
