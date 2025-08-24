@@ -149,13 +149,19 @@ def create_data_admin() -> BedrockAgent:
         name="data_admin",
         instructions=prompt,
         tools=[
-            atlassian_tools.search_issues,
-            atlassian_tools.get_issue,
-            atlassian_tools.create_issue,
-            atlassian_tools.update_issue,
-            atlassian_tools.add_comment,
-            atlassian_tools.add_attachment,
-            atlassian_tools.get_epic_children,
+            # Jira Issue Management
+            atlassian_tools.get_jira_issue,
+            atlassian_tools.edit_jira_issue,
+            atlassian_tools.create_jira_issue,
+            atlassian_tools.search_jira_issues_using_jql,
+            atlassian_tools.add_comment_to_jira_issue,
+            # Jira Project Management
+            atlassian_tools.get_visible_jira_projects,
+            atlassian_tools.get_jira_project_issue_types_metadata,
+            # Confluence Knowledge Management
+            atlassian_tools.get_confluence_page,
+            atlassian_tools.create_confluence_page,
+            atlassian_tools.update_confluence_page,
         ],
     )
 
