@@ -9,9 +9,8 @@
       ],
       "timeout": 300
     },
-    "jira-mcp": {
-      "command": "/Users/yumengzhang/.local/bin/uvx",
-      "args": ["jira-mcp"]
+    "atlassian-mcp-server": {
+      "url": "https://mcp.atlassian.com/v1/sse"
     }
   }
 }

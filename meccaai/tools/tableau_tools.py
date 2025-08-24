@@ -374,11 +374,22 @@ async def add_user_to_site(
 
 
 @tool("get_users_on_site")
-async def get_users_on_site() -> ToolResult:
-    """Get all users on the site.
+async def get_users_on_site(
+    filter_expression: str = "",
+    sort_expression: str = "",
+    fields: str = "_default_",
+    page_size: int = 100
+) -> ToolResult:
+    """Get users on the site with optional filtering and sorting.
+
+    Args:
+        filter_expression: Filter users (e.g., "siteRole:eq:Viewer" or "lastLogin:gte:2023-01-01T00:00:00Z")
+        sort_expression: Sort users (e.g., "name:asc" or "lastLogin:desc")  
+        fields: Fields to return (_default_, _all_, or specific fields like "id,name,siteRole")
+        page_size: Number of users per page (1-1000, default 100)
 
     Returns:
-        ToolResult: List of all users with their details
+        ToolResult: List of users with their details
     """
     auth_manager = TableauAuthManager()
 
@@ -395,13 +406,25 @@ async def get_users_on_site() -> ToolResult:
         # Make the API request with pagination support
         all_users = []
         page_number = 1
-        page_size = 100  # Smaller page size to avoid timeout
+
+        # Build query parameters
+        params = {
+            "pageSize": min(max(page_size, 1), 1000),  # Validate page_size range
+            "pageNumber": page_number
+        }
+        
+        if filter_expression:
+            params["filter"] = filter_expression
+        if sort_expression:
+            params["sort"] = sort_expression
+        if fields and fields != "_default_":
+            params["fields"] = fields
 
         # Configure timeout
         timeout = httpx.Timeout(60.0)  # 60 second timeout
         async with httpx.AsyncClient(timeout=timeout) as client:
             while True:
-                params = {"pageSize": page_size, "pageNumber": page_number}
+                params["pageNumber"] = page_number
 
                 response = await client.get(
                     url, params=params, headers=auth_manager.get_auth_headers()
@@ -524,11 +547,22 @@ async def get_users_in_group(group_id: str) -> ToolResult:
 
 
 @tool("get_group_set")
-async def get_group_set() -> ToolResult:
-    """Get all groups on the site.
+async def get_group_set(
+    filter_expression: str = "",
+    sort_expression: str = "",
+    fields: str = "_default_",
+    page_size: int = 100
+) -> ToolResult:
+    """Get groups on the site with optional filtering and sorting.
+
+    Args:
+        filter_expression: Filter groups (e.g., "name:has:Admin" or "domainName:eq:local")
+        sort_expression: Sort groups (e.g., "name:asc" or "createdAt:desc")  
+        fields: Fields to return (_default_, _all_, or specific fields like "id,name,domainName")
+        page_size: Number of groups per page (1-1000, default 100)
 
     Returns:
-        ToolResult: List of all groups with their details
+        ToolResult: List of groups with their details
     """
     auth_manager = TableauAuthManager()
 
@@ -545,13 +579,25 @@ async def get_group_set() -> ToolResult:
         # Make the API request with pagination support
         all_groups = []
         page_number = 1
-        page_size = 100  # Smaller page size to avoid timeout
+
+        # Build query parameters
+        params = {
+            "pageSize": min(max(page_size, 1), 1000),  # Validate page_size range
+            "pageNumber": page_number
+        }
+        
+        if filter_expression:
+            params["filter"] = filter_expression
+        if sort_expression:
+            params["sort"] = sort_expression
+        if fields and fields != "_default_":
+            params["fields"] = fields
 
         # Configure timeout
         timeout = httpx.Timeout(60.0)  # 60 second timeout
         async with httpx.AsyncClient(timeout=timeout) as client:
             while True:
-                params = {"pageSize": page_size, "pageNumber": page_number}
+                params["pageNumber"] = page_number
 
                 response = await client.get(
                     url, params=params, headers=auth_manager.get_auth_headers()
@@ -809,11 +855,22 @@ async def get_content_usage(
 
 
 @tool("get_datasources")
-async def get_datasources() -> ToolResult:
-    """Get all published data sources on the site.
+async def get_datasources(
+    filter_expression: str = "",
+    sort_expression: str = "",
+    fields: str = "_default_",
+    page_size: int = 100
+) -> ToolResult:
+    """Get published data sources on the site with optional filtering and sorting.
+
+    Args:
+        filter_expression: Filter data sources (e.g., "name:has:Sales" or "updatedAt:gte:2023-01-01T00:00:00Z")
+        sort_expression: Sort data sources (e.g., "name:asc" or "updatedAt:desc")  
+        fields: Fields to return (_default_, _all_, or specific fields like "id,name,updatedAt")
+        page_size: Number of data sources per page (1-1000, default 100)
 
     Returns:
-        ToolResult: List of all published data sources with their details
+        ToolResult: List of published data sources with their details
     """
     auth_manager = TableauAuthManager()
 
@@ -830,13 +887,25 @@ async def get_datasources() -> ToolResult:
         # Make the API request with pagination support
         all_datasources = []
         page_number = 1
-        page_size = 100
+
+        # Build query parameters
+        params = {
+            "pageSize": min(max(page_size, 1), 1000),  # Validate page_size range
+            "pageNumber": page_number
+        }
+        
+        if filter_expression:
+            params["filter"] = filter_expression
+        if sort_expression:
+            params["sort"] = sort_expression
+        if fields and fields != "_default_":
+            params["fields"] = fields
 
         # Configure timeout
         timeout = httpx.Timeout(60.0)  # 60 second timeout
         async with httpx.AsyncClient(timeout=timeout) as client:
             while True:
-                params = {"pageSize": page_size, "pageNumber": page_number}
+                params["pageNumber"] = page_number
 
                 response = await client.get(
                     url, params=params, headers=auth_manager.get_auth_headers()
@@ -886,11 +955,22 @@ async def get_datasources() -> ToolResult:
 
 
 @tool("get_workbooks")
-async def get_workbooks() -> ToolResult:
-    """Get all workbooks on the site.
+async def get_workbooks(
+    filter_expression: str = "",
+    sort_expression: str = "",
+    fields: str = "_default_",
+    page_size: int = 100
+) -> ToolResult:
+    """Get workbooks on the site with optional filtering and sorting.
+
+    Args:
+        filter_expression: Filter workbooks (e.g., "createdAt:gt:2023-01-01T00:00:00Z" or "ownerName:eq:john")
+        sort_expression: Sort workbooks (e.g., "createdAt:desc" or "name:asc")  
+        fields: Fields to return (_default_, _all_, or specific fields like "id,name,owner,project")
+        page_size: Number of workbooks per page (1-1000, default 100)
 
     Returns:
-        ToolResult: List of all workbooks with their details
+        ToolResult: List of workbooks with their details
     """
     auth_manager = TableauAuthManager()
 
@@ -907,13 +987,25 @@ async def get_workbooks() -> ToolResult:
         # Make the API request with pagination support
         all_workbooks = []
         page_number = 1
-        page_size = 100
+
+        # Build query parameters
+        params = {
+            "pageSize": min(max(page_size, 1), 1000),  # Validate page_size range
+            "pageNumber": page_number
+        }
+        
+        if filter_expression:
+            params["filter"] = filter_expression
+        if sort_expression:
+            params["sort"] = sort_expression
+        if fields and fields != "_default_":
+            params["fields"] = fields
 
         # Configure timeout
         timeout = httpx.Timeout(60.0)  # 60 second timeout
         async with httpx.AsyncClient(timeout=timeout) as client:
             while True:
-                params = {"pageSize": page_size, "pageNumber": page_number}
+                params["pageNumber"] = page_number
 
                 response = await client.get(
                     url, params=params, headers=auth_manager.get_auth_headers()
@@ -960,13 +1052,24 @@ async def get_workbooks() -> ToolResult:
 
 
 @tool("get_views_on_site")
-async def get_views_on_site() -> ToolResult:
-    """Get all views on the site.
+async def get_views_on_site(
+    filter_expression: str = "",
+    sort_expression: str = "",
+    fields: str = "_default_",
+    page_size: int = 100
+) -> ToolResult:
+    """Get views on the site with optional filtering and sorting.
 
     This can be used to get view LUIDs that can then be passed to get_content_usage.
 
+    Args:
+        filter_expression: Filter views (e.g., "workbookId:eq:abc123" or "viewUrlName:eq:Dashboard")
+        sort_expression: Sort views (e.g., "createdAt:desc" or "name:asc")  
+        fields: Fields to return (_default_, _all_, or specific fields like "id,name,viewUrlName")
+        page_size: Number of views per page (1-1000, default 100)
+
     Returns:
-        ToolResult: List of all views with their details including LUIDs
+        ToolResult: List of views with their details including LUIDs
     """
     auth_manager = TableauAuthManager()
 
@@ -983,13 +1086,25 @@ async def get_views_on_site() -> ToolResult:
         # Make the API request with pagination support
         all_views = []
         page_number = 1
-        page_size = 100
+
+        # Build query parameters
+        params = {
+            "pageSize": min(max(page_size, 1), 1000),  # Validate page_size range
+            "pageNumber": page_number
+        }
+        
+        if filter_expression:
+            params["filter"] = filter_expression
+        if sort_expression:
+            params["sort"] = sort_expression
+        if fields and fields != "_default_":
+            params["fields"] = fields
 
         # Configure timeout
         timeout = httpx.Timeout(60.0)  # 60 second timeout
         async with httpx.AsyncClient(timeout=timeout) as client:
             while True:
-                params = {"pageSize": page_size, "pageNumber": page_number}
+                params["pageNumber"] = page_number
 
                 response = await client.get(
                     url, params=params, headers=auth_manager.get_auth_headers()
