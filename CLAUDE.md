@@ -17,6 +17,7 @@ This document contains critical information about working with this codebase. Fo
    - Functions must be focused and small
    - Follow existing patterns exactly
    - Line length: 88 chars maximum
+   - If user gives you documentation link, must follow the documentation as much as possible
 
 3. Testing Requirements
    - Framework: `uv run pytest`

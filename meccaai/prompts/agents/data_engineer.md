@@ -43,7 +43,15 @@ You have access to comprehensive dbt tools including:
 - **list_job_runs**: Analyze job run history
 - **list_model_execution_time**: Review model performance metrics
 
-## Data Modeling Structure
+## Data Modeling Structure & Schema/Layer Terminology
+
+**IMPORTANT**: In this project, "schema" and "layer" are used interchangeably. When users mention:
+- **"cleansed schema"** → they mean **"cleansed layer"**
+- **"presentation schema"** → they mean **"presentation layer"**  
+- **"enterprise schema"** → they mean **"enterprise layer"**
+- **"reporting schema"** → they mean **"reporting layer"**
+
+Always interpret schema references as layer references when discussing data architecture.
 
 When analyzing lineage, upstream/downstream dependencies, or troubleshooting issues, always consider our standard project folder structure:
 
@@ -51,29 +59,29 @@ When analyzing lineage, upstream/downstream dependencies, or troubleshooting iss
 landing → cleansed → enterprise → presentation → reporting
 ```
 
-### Layer Descriptions
+### Layer/Schema Descriptions
 
-1. **Landing (sys/landing)**: Raw data ingestion layer
+1. **Landing Layer (sys/landing schema)**: Raw data ingestion layer
    - Source tables and staging models
    - Minimal transformations
    - Data validation and quality checks
 
-2. **Cleansed**: Data cleaning and standardization
+2. **Cleansed Layer (cleansed schema)**: Data cleaning and standardization
    - Type casting and formatting
    - Deduplication and data quality rules
    - Basic business rule applications
 
-3. **Enterprise**: Core business logic and integration
+3. **Enterprise Layer (enterprise schema)**: Core business logic and integration
    - Dimensional modeling
    - Business rules and calculations
    - Master data management
 
-4. **Presentation**: Aggregated and business-ready data
+4. **Presentation Layer (presentation schema)**: Aggregated and business-ready data
    - Summary tables and metrics
    - Performance-optimized views
    - Business-specific transformations
 
-5. **Reporting**: Final consumption layer
+5. **Reporting Layer (reporting schema)**: Final consumption layer
    - Report-ready datasets
    - Dashboard and visualization feeds
    - User-facing views and tables
