@@ -9,10 +9,11 @@ from typing import Any
 
 import httpx
 
-from meccaai.core.config import settings
+from meccaai.core.config import settings, get_settings
 from meccaai.core.logging import get_logger
 from meccaai.core.mcp_tool_base import mcp_tool
-from meccaai.core.tool_base import tool
+from meccaai.core.tool_base import tool, ToolResult
+from meccaai.core.tool_registry import get_registry
 from meccaai.prompts.loader import get_tool_description
 
 # ONLY actual dbt-mcp server tools (verified from dbt-labs/dbt-mcp repository)
@@ -378,49 +379,6 @@ def execute_sql(sql_query: str):
 logger = get_logger(__name__)
 
 
-def _filter_by_time_window(items: list, hours: int, time_field: str = "executeCompletedAt") -> list:
-    """Filter items by time window based on a timestamp field.
-
-    Args:
-        items: List of items to filter
-        hours: Number of hours to look back from now
-        time_field: The timestamp field to check (default: executeCompletedAt)
-
-    Returns:
-        Filtered list of items within the time window
-    """
-    if not items or hours <= 0:
-        return items
-
-    cutoff_time = datetime.now() - timedelta(hours=hours)
-    filtered_items = []
-
-    for item in items:
-        # Handle nested executionInfo structure
-        execution_info = item.get("executionInfo", {})
-        if execution_info:
-            timestamp_str = execution_info.get(time_field)
-        else:
-            timestamp_str = item.get(time_field)
-
-        if timestamp_str:
-            try:
-                # Parse ISO format timestamp (dbt returns ISO 8601)
-                timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
-                # Convert to local time for comparison (assuming UTC from dbt)
-                if timestamp.tzinfo:
-                    timestamp = timestamp.replace(tzinfo=None)
-
-                if timestamp >= cutoff_time:
-                    filtered_items.append(item)
-            except (ValueError, TypeError):
-                # If we can't parse the timestamp, include the item
-                filtered_items.append(item)
-        else:
-            # If no timestamp, include the item
-            filtered_items.append(item)
-
-    return filtered_items
 
 class DBTCloudDiscoveryAPI:
     """dbt Cloud Discovery API client."""
@@ -514,17 +472,10 @@ async def list_dbt_test_info(environment_id: str | None = None, limit: int = 20,
                   node {
                     name
                     uniqueId
-                    resourceType
-                    packageName
-                    originalFilePath
-                    database
-                    schema
                     columnName
-                    description
                     parents {
                       name
                       uniqueId
-                      resourceType
                     }
                     executionInfo {
                       lastRunId
@@ -534,7 +485,6 @@ async def list_dbt_test_info(environment_id: str | None = None, limit: int = 20,
                       executeStartedAt
                       executionTime
                     }
-                    tags
                   }
                 }
                 pageInfo {
@@ -560,8 +510,8 @@ async def list_dbt_test_info(environment_id: str | None = None, limit: int = 20,
         tests_data = result["data"]["environment"]["applied"]["tests"]
         all_tests = [edge["node"] for edge in tests_data["edges"]]
 
-        # Filter tests by time window
-        tests = _filter_by_time_window(all_tests, hours, "executeCompletedAt")
+        # Return all tests (removed time filtering)
+        tests = all_tests
 
         return {
             "total_tests": len(tests),
@@ -615,11 +565,6 @@ async def list_dbt_tests(environment_id: str | None = None, status_filter: str |
                   node {{
                     name
                     uniqueId
-                    resourceType
-                    packageName
-                    originalFilePath
-                    database
-                    schema
                     columnName
                     executionInfo {{
                       lastRunStatus
@@ -630,7 +575,6 @@ async def list_dbt_tests(environment_id: str | None = None, status_filter: str |
                     parents {{
                       name
                       uniqueId
-                      resourceType
                     }}
                   }}
                 }}
@@ -696,9 +640,6 @@ async def list_job_runs(job_id: str, run_id: str | None = None) -> dict[str, Any
               database
               schema
               alias
-              resourceType
-              packageName
-              originalFilePath
               status
               executionInfo {{
                 executionTime
@@ -710,9 +651,6 @@ async def list_job_runs(job_id: str, run_id: str | None = None) -> dict[str, Any
               tests {{
                 name
                 uniqueId
-                resourceType
-                packageName
-                originalFilePath
                 status
                 columnName
                 executionInfo {{
@@ -729,8 +667,6 @@ async def list_job_runs(job_id: str, run_id: str | None = None) -> dict[str, Any
               name
               database
               schema
-              resourceType
-              packageName
               state
               maxLoadedAt
               freshnessChecked
@@ -797,9 +733,6 @@ async def list_model_execution_time(environment_id: str | None = None, limit: in
                     database
                     schema
                     alias
-                    resourceType
-                    packageName
-                    originalFilePath
                     executionInfo {
                       executionTime
                       executeStartedAt
@@ -833,7 +766,7 @@ async def list_model_execution_time(environment_id: str | None = None, limit: in
         all_models = [edge["node"] for edge in models_data["edges"]]
 
         # Filter models by time window
-        models = _filter_by_time_window(all_models, hours, "executeCompletedAt")
+        models = all_models
 
         # Sort by execution time if requested
         if sort_by_time:
@@ -883,9 +816,6 @@ async def get_job_execution_performance(job_id: str, hours: int = 24) -> dict[st
               database
               schema
               alias
-              resourceType
-              packageName
-              originalFilePath
               status
               executionInfo {
                 executionTime
@@ -897,8 +827,6 @@ async def get_job_execution_performance(job_id: str, hours: int = 24) -> dict[st
               tests {
                 name
                 uniqueId
-                resourceType
-                packageName
                 status
                 executionInfo {
                   lastRunStatus
@@ -914,8 +842,6 @@ async def get_job_execution_performance(job_id: str, hours: int = 24) -> dict[st
               name
               database
               schema
-              resourceType
-              packageName
               state
               maxLoadedAt
               freshnessChecked
@@ -939,8 +865,8 @@ async def get_job_execution_performance(job_id: str, hours: int = 24) -> dict[st
         all_sources = job_data.get("sources", [])
 
         # Filter models and sources by time window
-        models = _filter_by_time_window(all_models, hours, "executeCompletedAt")
-        sources = _filter_by_time_window(all_sources, hours, "maxLoadedAt")
+        models = all_models
+        sources = all_sources
 
         # Calculate performance metrics
         total_execution_time = sum(
@@ -1025,9 +951,6 @@ async def get_folder_performance_summary(
               database
               schema
               alias
-              resourceType
-              packageName
-              originalFilePath
               executionInfo {
                 executionTime
                 executeStartedAt
@@ -1062,7 +985,7 @@ async def get_folder_performance_summary(
                 folder_models.append(model)
 
         # Apply time filtering
-        recent_models = _filter_by_time_window(folder_models, hours, "executeCompletedAt")
+        recent_models = folder_models
 
         # Limit results to prevent oversized responses
         limited_models = recent_models[:limit]
@@ -1103,3 +1026,173 @@ async def get_folder_performance_summary(
     except Exception as e:
         logger.error(f"Error getting folder performance summary: {e}")
         raise e
+
+
+@tool("get_model_and_upstream_tests")
+async def get_model_and_upstream_tests(
+    model_name: str,
+    environment_id: int | None = None,
+    limit: int = 20
+) -> ToolResult:
+    """Get tests for a specific model and its upstream dependencies.
+    
+    Args:
+        model_name: Name of the model to get tests for
+        environment_id: dbt Cloud environment ID (optional, uses default if not provided)
+        limit: Maximum number of tests to return per model (default: 20)
+        
+    Returns:
+        ToolResult with test information including model name, test name, status, and execution time
+    """
+    try:
+        # Get environment ID from settings if not provided
+        if environment_id is None:
+            environment_id = getattr(get_settings(), 'dbt_environment_id', None)
+            if not environment_id:
+                raise ValueError("Environment ID not provided and not found in settings")
+        
+        api = DBTCloudDiscoveryAPI()
+        
+        # First, find the model and get its parents
+        model_query = """
+        query ($environmentId: BigInt!, $first: Int!) {
+          environment(id: $environmentId) {
+            applied {
+              models(first: $first) {
+                edges {
+                  node {
+                    name
+                    uniqueId
+                    parents {
+                      name
+                      uniqueId
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        """
+        
+        variables = {
+            "environmentId": int(environment_id),
+            "first": 100  # Get more models to find the target and parents
+        }
+        
+        result = await api.query_graphql(model_query, variables)
+        
+        if "errors" in result:
+            raise ValueError(f"GraphQL errors: {result['errors']}")
+            
+        models = result["data"]["environment"]["applied"]["models"]["edges"]
+        
+        # Find the target model and collect all model names (target + parents)
+        target_model = None
+        model_names = set()
+        
+        for edge in models:
+            model = edge["node"]
+            if model["name"] == model_name:
+                target_model = model
+                model_names.add(model_name)
+                # Add parent model names
+                for parent in model.get("parents", []):
+                    model_names.add(parent["name"])
+                break
+                
+        if not target_model:
+            return ToolResult(
+                success=False,
+                result=None,
+                error=f"Model '{model_name}' not found in environment {environment_id}"
+            )
+        
+        # Now get tests for all these models
+        tests_query = """
+        query ($environmentId: BigInt!, $first: Int!) {
+          environment(id: $environmentId) {
+            applied {
+              tests(first: $first) {
+                edges {
+                  node {
+                    name
+                    uniqueId
+                    columnName
+                    parents {
+                      name
+                    }
+                    executionInfo {
+                      lastRunStatus
+                      executeCompletedAt
+                      executionTime
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        """
+        
+        test_variables = {
+            "environmentId": int(environment_id),
+            "first": min(limit * len(model_names), 500)  # Get enough tests
+        }
+        
+        test_result = await api.query_graphql(tests_query, test_variables)
+        
+        if "errors" in test_result:
+            raise ValueError(f"GraphQL errors: {test_result['errors']}")
+            
+        all_tests = test_result["data"]["environment"]["applied"]["tests"]["edges"]
+        
+        # Filter tests that belong to our target models
+        relevant_tests = []
+        for edge in all_tests:
+            test = edge["node"]
+            # Check if this test is associated with any of our target models
+            test_parents = [parent["name"] for parent in test.get("parents", [])]
+            if any(parent_name in model_names for parent_name in test_parents):
+                # Find which model this test belongs to
+                test_model = None
+                for parent_name in test_parents:
+                    if parent_name in model_names:
+                        test_model = parent_name
+                        break
+                
+                relevant_tests.append({
+                    "model_name": test_model,
+                    "test_name": test["name"],
+                    "test_status": test["executionInfo"].get("lastRunStatus") if test["executionInfo"] else None,
+                    "test_time": test["executionInfo"].get("executeCompletedAt") if test["executionInfo"] else None,
+                    "execution_time_seconds": test["executionInfo"].get("executionTime") if test["executionInfo"] else None,
+                    "column_name": test.get("columnName"),
+                    "unique_id": test["uniqueId"]
+                })
+        
+        # Sort by execution time (most recent first)
+        relevant_tests.sort(key=lambda x: x["test_time"] or "", reverse=True)
+        
+        # Limit results
+        limited_tests = relevant_tests[:limit]
+        
+        return ToolResult(
+            success=True,
+            result={
+                "target_model": model_name,
+                "total_models_checked": len(model_names),
+                "model_names": list(model_names),
+                "total_tests_found": len(relevant_tests),
+                "tests": limited_tests
+            },
+            error=None
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting model and upstream tests: {e}")
+        return ToolResult(
+            success=False,
+            result=None,
+            error=str(e)
+        )

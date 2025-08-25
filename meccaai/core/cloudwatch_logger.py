@@ -22,6 +22,12 @@ class CloudWatchLogger:
         self.log_stream_name = f"ai-responses-{datetime.now().strftime('%Y-%m-%d')}"
         self.region_name = getattr(settings, 'aws_region', 'us-east-1')
         
+        # Configurable truncation limits - ensure they are integers
+        self.max_user_query_length = int(getattr(settings, 'cloudwatch_max_user_query_length', 5000))
+        self.max_ai_response_length = int(getattr(settings, 'cloudwatch_max_ai_response_length', 10000))
+        self.max_tool_output_length = int(getattr(settings, 'cloudwatch_max_tool_output_length', 50000))
+        self.max_tool_input_length = int(getattr(settings, 'cloudwatch_max_tool_input_length', 10000))
+        
         try:
             # Initialize CloudWatch Logs client
             self.cloudwatch_logs = boto3.client(
@@ -65,6 +71,30 @@ class CloudWatchLogger:
             logger.error(f"Failed to ensure CloudWatch log infrastructure: {e}")
             raise
     
+    def _truncate_string(self, text: str, max_length: int, field_name: str = "text") -> str:
+        """Truncate string with warning if needed."""
+        try:
+            # Ensure max_length is an integer
+            max_length = int(max_length)
+            
+            # Handle None or empty text
+            if not text:
+                return text
+            
+            # Convert to string if needed
+            text_str = str(text)
+            
+            if len(text_str) > max_length:
+                truncated_text = text_str[:max_length]
+                logger.warning(f"CloudWatch log {field_name} truncated from {len(text_str)} to {max_length} characters")
+                return truncated_text + f"\n... [TRUNCATED - Original length: {len(text_str)} characters]"
+            return text_str
+            
+        except (ValueError, TypeError) as e:
+            logger.error(f"Error in _truncate_string for {field_name}: {e}")
+            # Return original text if truncation fails
+            return str(text) if text else ""
+    
     def log_ai_response(
         self, 
         user_query: str,
@@ -93,11 +123,11 @@ class CloudWatchLogger:
             return False
         
         try:
-            # Prepare log entry
+            # Prepare log entry with configurable truncation
             log_entry = {
                 "timestamp": datetime.utcnow().isoformat() + "Z",
-                "user_query": user_query[:1000],  # Truncate long queries
-                "ai_response": ai_response[:2000] if ai_response else None,  # Truncate long responses
+                "user_query": self._truncate_string(user_query, self.max_user_query_length, "user_query"),
+                "ai_response": self._truncate_string(ai_response, self.max_ai_response_length, "ai_response") if ai_response else None,
                 "tool_calls": tool_calls,
                 "execution_time_ms": execution_time_ms,
                 "model_name": model_name,
@@ -140,11 +170,24 @@ class CloudWatchLogger:
             return False
         
         try:
+            # Convert tool output to string and truncate if needed
+            tool_output_str = str(tool_output) if tool_output else None
+            truncated_tool_output = self._truncate_string(tool_output_str, self.max_tool_output_length, "tool_output") if tool_output_str else None
+            
+            # Truncate tool input if it's too large
+            try:
+                tool_input_str = json.dumps(tool_input, default=str, ensure_ascii=False)
+            except (TypeError, ValueError) as e:
+                logger.warning(f"Failed to serialize tool input: {e}")
+                tool_input_str = str(tool_input)
+            
+            truncated_tool_input = self._truncate_string(tool_input_str, self.max_tool_input_length, "tool_input")
+            
             log_entry = {
                 "timestamp": datetime.utcnow().isoformat() + "Z",
                 "tool_name": tool_name,
-                "tool_input": tool_input,
-                "tool_output": str(tool_output)[:1000] if tool_output else None,  # Truncate large outputs
+                "tool_input": truncated_tool_input,
+                "tool_output": truncated_tool_output,
                 "execution_time_ms": execution_time_ms,
                 "success": success,
                 "error": error,
