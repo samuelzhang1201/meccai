@@ -75,8 +75,11 @@ Thumbs.db
 *.sqlite
 *.sqlite3
 logs/
+logs/*
 temp/
 .uv/
+exports/
+data/
 
 # Configuration files with secrets
 config/mcp/cursor.mcp.json

@@ -110,11 +110,18 @@ def create_data_engineer() -> BedrockAgent:
             dbt_tools.text_to_sql,
             dbt_tools.execute_sql,
             dbt_tools.get_metrics_compiled_sql,
-            # dbt Cloud Discovery API Tools
-            dbt_tools.list_dbt_test_info,
+            # dbt Cloud Discovery API Tools - Category 1 (Job ID based)
+            dbt_tools.list_jobs,
             dbt_tools.list_dbt_tests,
-            dbt_tools.list_job_runs,
-            dbt_tools.list_model_execution_time,
+            dbt_tools.list_dbt_test,
+            dbt_tools.list_dbt_model,
+            dbt_tools.list_dbt_models,
+            # dbt Cloud Discovery API Tools - Category 2 (Environment level)
+            dbt_tools.model_execution_time,
+            dbt_tools.model_status,
+            dbt_tools.model_lineage,
+            dbt_tools.failed_models_and_tests,
+            dbt_tools.list_test_result,
         ],
     )
 
@@ -164,7 +171,6 @@ def create_data_admin() -> BedrockAgent:
             atlassian_tools.update_confluence_page,
         ],
     )
-
 
 
 def create_data_manager() -> BedrockAgent:

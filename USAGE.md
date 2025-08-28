@@ -1,6 +1,6 @@
-# Lumos AI System - Usage Guide
+# MeccaAI System - Usage Guide
 
-The Lumos AI system has been successfully implemented according to the requirements. Here's how to use it:
+The MeccaAI system is a comprehensive data management platform with multi-agent coordination capabilities. Here's how to use it:
 
 ## Setup
 
@@ -12,85 +12,115 @@ The Lumos AI system has been successfully implemented according to the requireme
 2. **Configure environment**:
    Create a `.env` file with your API keys:
    ```bash
-   OPENAI_API_KEY=your_openai_api_key_here
-   TABLEAU_PAT_TOKEN=your_tableau_pat_token_here
+   # AWS Bedrock Configuration (Primary AI Provider)
+   AWS_ACCESS_KEY_ID=your_aws_access_key_id
+   AWS_SECRET_ACCESS_KEY=your_aws_secret_access_key
+   AWS_SESSION_TOKEN=your_aws_session_token (optional)
+   AWS_REGION=ap-southeast-2
+   
+   # Tableau Configuration
+   TABLEAU_TOKEN_VALUE=your_tableau_personal_access_token
+   
+   # CloudWatch Logging (optional - see config for control)
+   CLOUDWATCH_LOG_GROUP=your_log_group_name
    ```
+
+3. **Local Logging**:
+   Logs are automatically stored in the `logs/` directory with rotation and JSON formatting.
 
 ## Command Line Usage
 
 ### Basic Commands
 
 ```bash
-# List all available agents
-lumos list-agents
+# Run the Bedrock-based agent application
+uv run python meccaai/apps/lumos_bedrock_agents.py
 
-# Chat with a specific agent
-lumos chat --agent tableau "List all personal access tokens"
-lumos chat --agent dbt "Run data transformations"
-lumos chat --agent reporting "Analyze the latest sales data"
+# Run the main Lumos Bedrock application
+uv run python meccaai/apps/lumos_bedrock_app.py
 
-# Use orchestrated workflow (multiple agents)
-lumos chat --workflow "Create a comprehensive data report with Tableau visualizations"
+# Test individual Tableau functions
+uv run python tests/test_tableau_functions.py
 ```
 
-### Tableau-Specific Commands
+### Testing Tools
 
 ```bash
-# List Tableau Personal Access Tokens
-lumos tableau-pats
+# Run all tests
+uv run pytest
 
-# Get details of a specific view
-lumos tableau-view abc123-def456
+# Test specific modules
+uv run pytest tests/test_tableau_functions.py -v
 
-# Export a view to PDF with filters
-lumos tableau-pdf abc123-def456 --filters '{"region": "north", "year": "2024"}'
+# Format code
+uv run ruff format .
+
+# Type checking
+uv run pyright
 ```
 
 ## Programmatic Usage
 
 ```python
 import asyncio
-from meccaai.apps.lumos_agents import LumosAgentSystem
-from meccaai.core.types import Message
+from meccaai.tools.tableau_tools import (
+    get_datasources,
+    get_workbooks, 
+    get_views_on_site,
+    get_content_usage
+)
 
 async def main():
-    system = LumosAgentSystem()
+    # Get all datasources
+    result = await get_datasources.call(page_size=100)
+    if result.success:
+        data = result.result
+        print(f"Found {data['total_datasources']} datasources")
     
-    # Use Tableau analyst
-    messages = [Message(role="user", content="List all PATs in our Tableau site")]
-    result = await system.process_request(messages, agent="tableau")
-    print(result.content)
+    # Get workbooks with filtering
+    result = await get_workbooks.call(
+        filter_expression="createdAt:gt:2023-01-01T00:00:00Z",
+        page_size=50
+    )
+    if result.success:
+        data = result.result  
+        print(f"Found {data['total_workbooks']} recent workbooks")
     
-    # Use orchestrated workflow
-    messages = [Message(role="user", content="Generate weekly analytics report")]
-    results = await system.process_request(messages, workflow=True)
-    for result in results:
-        print(result.content)
+    # Get views for usage analysis
+    result = await get_views_on_site.call(page_size=500)
+    if result.success:
+        data = result.result
+        print(f"Found {data['total_views']} views")
 
 asyncio.run(main())
 ```
 
 ## Available Agents
 
-### 1. **Lumos AI Manager** (`manager`)
-- **Role**: Central orchestrator who coordinates between specialized agents
-- **Tools**: Email sending, Slack messaging, Google Sheets integration, webhooks
-- **Use for**: Report generation, workflow coordination, communication
+### 1. **Data Manager** (`data_manager`)
+- **Role**: Central orchestrator and primary interface for users
+- **Capabilities**: Coordinates tasks across different agents, provides comprehensive data reporting with both summaries and detailed lists (up to 500 rows)
+- **Use for**: Workflow orchestration, project management, comprehensive reporting
 
-### 2. **Tableau Analyst** (`tableau`)  
-- **Role**: Expert data visualization specialist for Tableau operations
-- **Tools**: PAT management, view querying, PDF export, dashboard analysis
-- **Use for**: Tableau administration, visualization exports, dashboard insights
+### 2. **Data Analyst** (`data_analyst`)  
+- **Role**: Semantic layer queries and data insights specialist
+- **Tools**: dbt metrics, data analysis, business intelligence
+- **Use for**: Query execution, metrics analysis, trend identification
 
-### 3. **DBT Build Agent** (`dbt`)
-- **Role**: Data engineering specialist for dbt operations
-- **Tools**: Model building, testing, documentation generation
-- **Use for**: Data transformations, model management, data quality
+### 3. **Data Engineer** (`data_engineer`)
+- **Role**: dbt project management and data pipeline specialist
+- **Tools**: dbt model building, testing, documentation, discovery
+- **Use for**: Data transformations, model management, pipeline health
 
-### 4. **Reporting Analyst** (`reporting`)
-- **Role**: Experienced data analyst for insights and reporting
-- **Tools**: General analysis tools, data interpretation
-- **Use for**: Data analysis, trend identification, business insights
+### 4. **Tableau Admin** (`tableau_admin`)
+- **Role**: Tableau user management and site administration
+- **Tools**: User management, permissions, site administration, content management
+- **Use for**: Tableau administration, user lifecycle, permissions management
+
+### 5. **Data Admin** (`data_admin`)
+- **Role**: Jira project management and team coordination
+- **Tools**: Issue tracking, project management, team coordination
+- **Use for**: Project management, issue resolution, team coordination
 
 ## Tableau Integration
 
@@ -100,20 +130,34 @@ The system includes comprehensive Tableau REST API integration:
 - **API Version**: 3.25 (latest)
 - **Server**: `https://prod-apsoutheast-a.online.tableau.com`
 - **Site**: `meccalumos`
-- **Pagination**: Automatic handling for large datasets
+- **Pagination**: Automatic handling for large datasets (up to 500 records per request)
 
 ### Available Tableau Operations
 
-1. **list_all_pats**: List all Personal Access Tokens
-2. **get_view**: Get detailed view information by ID
-3. **query_view_pdf**: Export views to PDF with optional filters
-4. **list_views**: List all views (with optional workbook filtering)
+#### Content Management:
+1. **get_content_usage**: Get usage statistics for workbooks, views, data sources
+2. **get_datasources**: List published data sources with filtering and sorting
+3. **get_workbooks**: List workbooks with filtering and sorting
+4. **get_views_on_site**: List all views with filtering options
+
+#### User Management:
+5. **get_users_on_site**: List site users with filtering and pagination
+6. **add_user_to_site**: Add new users to the site
+7. **update_user**: Update user information and roles
+8. **get_users_in_group**: Get users in specific groups
+
+#### Access Management:
+9. **list_all_personal_access_tokens**: List Personal Access Tokens
+10. **get_group_set**: List all groups with filtering and sorting
 
 ## Security Features
 
 - **Secure Credentials**: API keys stored as environment variables
 - **Session Management**: Automatic Tableau session cleanup
 - **Token-based Auth**: Uses Personal Access Tokens for Tableau API
+- **AWS Integration**: Bedrock for AI models with proper IAM credentials
+- **Local Logging**: Logs stored locally in `logs/` directory with rotation
+- **CloudWatch Control**: Optional CloudWatch logging with configurable parameters
 - **No Hardcoded Secrets**: All sensitive data configurable via environment
 
 ## Future Extensibility
@@ -150,11 +194,24 @@ The implementation follows all project guidelines:
 
 ## Architecture Highlights
 
-- **Multi-Agent System**: Specialized agents for different domains
+- **Multi-Agent System**: Specialized agents for different data domains
 - **Tool-based Architecture**: Modular tools that can be mixed and matched
-- **OpenAI Integration**: Uses GPT-4 for intelligent responses
+- **AWS Bedrock Integration**: Uses Claude Sonnet for intelligent responses
+- **Comprehensive Reporting**: Provides both summary statistics and detailed lists (up to 500 rows)
 - **Async/Await**: Fully asynchronous for high performance
 - **Configuration Management**: YAML + environment variable configuration
-- **Logging**: Structured logging throughout the system
+- **Structured Logging**: JSON formatted logs with local storage and optional CloudWatch
+- **Type Safety**: Full type hints throughout the codebase
+- **Testing**: Comprehensive test suite for reliability
 
-The Lumos AI system is now fully implemented and ready for production use!
+## Logging Configuration
+
+The system now supports:
+- **Local Logging**: Automatically stores logs in `logs/meccaai.log` with rotation (10MB files, 5 backups)
+- **Console Logging**: Real-time console output for development
+- **JSON Format**: Structured logging for better parsing and analysis
+- **CloudWatch Integration**: Optional upload to AWS CloudWatch (configurable)
+
+To control CloudWatch logging, see the configuration section for the new parameter.
+
+The MeccaAI system is now fully implemented and ready for production use!

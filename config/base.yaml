@@ -55,6 +55,24 @@ memory:
   provider: "chromadb"
   persist_directory: "./data/chroma"
 
+# Logging Configuration
+logging:
+  # Local file logging - logs AI prompts, responses, thinking, and datetime info
+  local:
+    enabled: true
+    log_file: "logs/ai_interactions.log"
+    max_file_size_mb: 50
+    backup_count: 10
+    log_level: "DEBUG"
+    
+  # CloudWatch logging - sends logs to AWS CloudWatch
+  cloudwatch:
+    enabled: false
+    log_group: "/meccaai/ai-interactions"
+    log_stream_prefix: "ai-session"
+    log_level: "INFO"
+    max_message_size: 256000  # CloudWatch limit
+    
 # Telemetry
 telemetry:
   enabled: false

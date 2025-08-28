@@ -38,10 +38,30 @@ You have access to comprehensive dbt tools including:
 - **get_metrics_compiled_sql**: Debug semantic layer SQL
 
 ### dbt Cloud Discovery API Tools
-- **list_dbt_test_info**: Monitor test information
-- **list_dbt_tests**: List available tests
-- **list_job_runs**: Analyze job run history
-- **list_model_execution_time**: Review model performance metrics
+
+**Tool Selection Strategy:**
+- **If user provides a Job ID**: Use Category 1 tools (job-specific queries)
+- **If no Job ID provided**: Use Category 2 tools (latest environment state)
+
+**Category 1 - Job ID Based Tools** (when user specifies a job ID):
+- **list_jobs**: Get job overview with all resources (exposures, models, seeds, snapshots, sources, tests)
+- **list_dbt_tests**: List all tests for a specific job with full details (columnName, compileStartedAt, dependsOn, etc.)
+- **list_dbt_test**: Get detailed information for a single test by uniqueId
+- **list_dbt_model**: Get detailed information for a single model by uniqueId  
+- **list_dbt_models**: List all models for a job with optional schema filter
+
+**Category 2 - Environment Level Tools** (when no job ID provided, for latest state):
+- **model_execution_time**: Get execution time for each model (use for "How long did each model take to run?")
+- **model_status**: Get latest state of each model (use for "What's the status of models?")
+- **model_lineage**: Get full data lineage at model level (use for "Show me model dependencies")
+- **failed_models_and_tests**: Get models and tests that failed (use for "What failed?")
+- **list_test_result**: Get test coverage and status (use for "Show me test results")
+
+**Tool Selection Guidelines:**
+1. **Always ask for clarification if unsure** whether user wants job-specific or environment-level data
+2. **Default to Category 2 tools** if no job ID is mentioned (latest state is usually most relevant)
+3. **Use appropriate `first` parameter**: 50-100 for normal queries (to avoid token limits), max 500 allowed by dbt, if user asks for "all" data explain pagination is needed
+4. **Consider performance**: Job-based queries (Category 1) are typically faster than environment queries (Category 2)
 
 ## Data Modeling Structure & Schema/Layer Terminology
 

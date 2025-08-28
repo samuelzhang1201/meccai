@@ -378,13 +378,13 @@ async def get_users_on_site(
     filter_expression: str = "",
     sort_expression: str = "",
     fields: str = "_default_",
-    page_size: int = 100
+    page_size: int = 100,
 ) -> ToolResult:
     """Get users on the site with optional filtering and sorting.
 
     Args:
         filter_expression: Filter users (e.g., "siteRole:eq:Viewer" or "lastLogin:gte:2023-01-01T00:00:00Z")
-        sort_expression: Sort users (e.g., "name:asc" or "lastLogin:desc")  
+        sort_expression: Sort users (e.g., "name:asc" or "lastLogin:desc")
         fields: Fields to return (_default_, _all_, or specific fields like "id,name,siteRole")
         page_size: Number of users per page (1-1000, default 100)
 
@@ -410,15 +410,17 @@ async def get_users_on_site(
         # Build query parameters
         params = {
             "pageSize": min(max(page_size, 1), 1000),  # Validate page_size range
-            "pageNumber": page_number
+            "pageNumber": page_number,
         }
-        
+
         if filter_expression:
             params["filter"] = filter_expression
         if sort_expression:
             params["sort"] = sort_expression
-        if fields and fields != "_default_":
-            params["fields"] = fields
+        # Skip fields parameter for users API as it's causing 400 errors with some field names
+        # The API returns all available fields by default anyway
+        # if fields and fields != "_default_":
+        #     params["fields"] = fields
 
         # Configure timeout
         timeout = httpx.Timeout(60.0)  # 60 second timeout
@@ -551,13 +553,13 @@ async def get_group_set(
     filter_expression: str = "",
     sort_expression: str = "",
     fields: str = "_default_",
-    page_size: int = 100
+    page_size: int = 100,
 ) -> ToolResult:
     """Get groups on the site with optional filtering and sorting.
 
     Args:
         filter_expression: Filter groups (e.g., "name:has:Admin" or "domainName:eq:local")
-        sort_expression: Sort groups (e.g., "name:asc" or "createdAt:desc")  
+        sort_expression: Sort groups (e.g., "name:asc" or "createdAt:desc")
         fields: Fields to return (_default_, _all_, or specific fields like "id,name,domainName")
         page_size: Number of groups per page (1-1000, default 100)
 
@@ -583,9 +585,9 @@ async def get_group_set(
         # Build query parameters
         params = {
             "pageSize": min(max(page_size, 1), 1000),  # Validate page_size range
-            "pageNumber": page_number
+            "pageNumber": page_number,
         }
-        
+
         if filter_expression:
             params["filter"] = filter_expression
         if sort_expression:
@@ -769,39 +771,41 @@ async def get_content_usage(
             if isinstance(content_items, str):
                 try:
                     import json
+
                     content_items = json.loads(content_items)
-                    logger.info(f"Parsed content_items from JSON string: {len(content_items)} items")
+                    logger.info(
+                        f"Parsed content_items from JSON string: {len(content_items)} items"
+                    )
                 except json.JSONDecodeError as e:
                     logger.error(f"Failed to parse content_items JSON string: {e}")
                     return ToolResult(
                         success=False,
-                        result={"error": f"Invalid content_items JSON format: {e}"}
+                        result={"error": f"Invalid content_items JSON format: {e}"},
                     )
-            
+
             # Format each content item properly for the API
             formatted_items = []
             for item in content_items:
                 if isinstance(item, dict):
                     # Handle both contentType and type field names
-                    content_type = item.get("contentType") or item.get("type", "workbook")
+                    content_type = item.get("contentType") or item.get(
+                        "type", "workbook"
+                    )
                     luid = item.get("luid") or item.get("id")
-                    
+
                     if luid:
-                        formatted_items.append({
-                            "luid": luid,
-                            "type": content_type
-                        })
-            
+                        formatted_items.append({"luid": luid, "type": content_type})
+
             if formatted_items:
                 request_body = {"content_items": formatted_items}
             else:
                 # If no valid items, return empty result immediately
                 return ToolResult(
-                    success=True, 
+                    success=True,
                     result={
                         "message": "No valid content items provided for usage statistics",
-                        "content_usage": {"content_items": []}
-                    }
+                        "content_usage": {"content_items": []},
+                    },
                 )
         else:
             # If no content items provided, return empty result immediately
@@ -809,8 +813,8 @@ async def get_content_usage(
                 success=True,
                 result={
                     "message": "No content items specified. Please provide workbook/view IDs to get usage statistics.",
-                    "content_usage": {"content_items": []}
-                }
+                    "content_usage": {"content_items": []},
+                },
             )
 
         # Configure timeout for potentially long-running request
@@ -859,13 +863,13 @@ async def get_datasources(
     filter_expression: str = "",
     sort_expression: str = "",
     fields: str = "_default_",
-    page_size: int = 100
+    page_size: int = 100,
 ) -> ToolResult:
     """Get published data sources on the site with optional filtering and sorting.
 
     Args:
         filter_expression: Filter data sources (e.g., "name:has:Sales" or "updatedAt:gte:2023-01-01T00:00:00Z")
-        sort_expression: Sort data sources (e.g., "name:asc" or "updatedAt:desc")  
+        sort_expression: Sort data sources (e.g., "name:asc" or "updatedAt:desc")
         fields: Fields to return (_default_, _all_, or specific fields like "id,name,updatedAt")
         page_size: Number of data sources per page (1-1000, default 100)
 
@@ -891,9 +895,9 @@ async def get_datasources(
         # Build query parameters
         params = {
             "pageSize": min(max(page_size, 1), 1000),  # Validate page_size range
-            "pageNumber": page_number
+            "pageNumber": page_number,
         }
-        
+
         if filter_expression:
             params["filter"] = filter_expression
         if sort_expression:
@@ -959,13 +963,13 @@ async def get_workbooks(
     filter_expression: str = "",
     sort_expression: str = "",
     fields: str = "_default_",
-    page_size: int = 100
+    page_size: int = 100,
 ) -> ToolResult:
     """Get workbooks on the site with optional filtering and sorting.
 
     Args:
         filter_expression: Filter workbooks (e.g., "createdAt:gt:2023-01-01T00:00:00Z" or "ownerName:eq:john")
-        sort_expression: Sort workbooks (e.g., "createdAt:desc" or "name:asc")  
+        sort_expression: Sort workbooks (e.g., "createdAt:desc" or "name:asc")
         fields: Fields to return (_default_, _all_, or specific fields like "id,name,owner,project")
         page_size: Number of workbooks per page (1-1000, default 100)
 
@@ -991,9 +995,9 @@ async def get_workbooks(
         # Build query parameters
         params = {
             "pageSize": min(max(page_size, 1), 1000),  # Validate page_size range
-            "pageNumber": page_number
+            "pageNumber": page_number,
         }
-        
+
         if filter_expression:
             params["filter"] = filter_expression
         if sort_expression:
@@ -1056,7 +1060,7 @@ async def get_views_on_site(
     filter_expression: str = "",
     sort_expression: str = "",
     fields: str = "_default_",
-    page_size: int = 100
+    page_size: int = 100,
 ) -> ToolResult:
     """Get views on the site with optional filtering and sorting.
 
@@ -1064,7 +1068,7 @@ async def get_views_on_site(
 
     Args:
         filter_expression: Filter views (e.g., "workbookId:eq:abc123" or "viewUrlName:eq:Dashboard")
-        sort_expression: Sort views (e.g., "createdAt:desc" or "name:asc")  
+        sort_expression: Sort views (e.g., "createdAt:desc" or "name:asc")
         fields: Fields to return (_default_, _all_, or specific fields like "id,name,viewUrlName")
         page_size: Number of views per page (1-1000, default 100)
 
@@ -1090,9 +1094,9 @@ async def get_views_on_site(
         # Build query parameters
         params = {
             "pageSize": min(max(page_size, 1), 1000),  # Validate page_size range
-            "pageNumber": page_number
+            "pageNumber": page_number,
         }
-        
+
         if filter_expression:
             params["filter"] = filter_expression
         if sort_expression:
