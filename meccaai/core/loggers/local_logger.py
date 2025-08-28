@@ -2,6 +2,7 @@
 
 import json
 import os
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -17,12 +18,14 @@ class LocalLogger:
         """Initialize local logger with configuration from settings."""
         self.config = getattr(settings, 'logging', {}).get('local', {})
         self.enabled = self.config.get('enabled', False)
+        self.session_id = self._generate_session_id()
         
         if not self.enabled:
             return
         
-        # Setup file logging
-        self.log_file = self.config.get('log_file', 'logs/ai_interactions.log')
+        # Setup session-based file logging
+        base_log_file = self.config.get('log_file', 'logs/ai_interactions.log')
+        self.log_file = self._get_session_log_file(base_log_file)
         self.max_file_size = self.config.get('max_file_size_mb', 50) * 1024 * 1024  # Convert to bytes
         self.backup_count = self.config.get('backup_count', 10)
         self.log_level = self.config.get('log_level', 'DEBUG')
@@ -31,8 +34,8 @@ class LocalLogger:
         log_path = Path(self.log_file)
         log_path.parent.mkdir(parents=True, exist_ok=True)
         
-        # Setup rotating file handler
-        self.logger = logging.getLogger('meccaai.local')
+        # Setup rotating file handler with session-based filename
+        self.logger = logging.getLogger(f'meccaai.local.{self.session_id}')
         self.logger.setLevel(getattr(logging, self.log_level))
         
         # Remove existing handlers
@@ -52,6 +55,47 @@ class LocalLogger:
         handler.setFormatter(formatter)
         self.logger.addHandler(handler)
         self.logger.propagate = False
+        
+        # Log session start
+        self._log_session_start()
+
+    def _generate_session_id(self) -> str:
+        """Generate a unique session ID based on timestamp and process."""
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        pid = os.getpid()
+        return f"session_{timestamp}_{pid}"
+    
+    def _get_session_log_file(self, base_log_file: str) -> str:
+        """Generate session-specific log file path."""
+        log_path = Path(base_log_file)
+        stem = log_path.stem
+        suffix = log_path.suffix
+        parent = log_path.parent
+        
+        # Create filename: ai_interactions_session_20250828_143022_1234.log
+        session_filename = f"{stem}_{self.session_id}{suffix}"
+        return str(parent / session_filename)
+    
+    def _log_session_start(self):
+        """Log the start of a new session."""
+        try:
+            log_entry = {
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "event_type": "session_start",
+                "level": "INFO",
+                "message": f"Started new logging session: {self.session_id}",
+                "data": {
+                    "session_id": self.session_id,
+                    "log_file": self.log_file,
+                    "pid": os.getpid(),
+                    "start_time": datetime.utcnow().isoformat() + "Z"
+                }
+            }
+            
+            json_log = json.dumps(log_entry, ensure_ascii=False, separators=(',', ':'))
+            self.logger.info(json_log)
+        except Exception:
+            pass  # Silent failure to avoid breaking initialization
     
     def log_ai_interaction(
         self,
@@ -97,7 +141,7 @@ class LocalLogger:
                 "model_name": model_name,
                 "error": error,
                 "metadata": metadata or {},
-                "session_id": getattr(settings, 'session_id', 'unknown')
+                "session_id": self.session_id
             }
             
             # Convert to JSON and log
@@ -155,7 +199,7 @@ class LocalLogger:
                 "execution_time_ms": execution_time_ms,
                 "success": success,
                 "error": error,
-                "session_id": getattr(settings, 'session_id', 'unknown')
+                "session_id": self.session_id
             }
             
             json_log = json.dumps(log_entry, ensure_ascii=False, separators=(',', ':'))
@@ -193,7 +237,7 @@ class LocalLogger:
                 "level": level.upper(),
                 "message": message,
                 "data": data or {},
-                "session_id": getattr(settings, 'session_id', 'unknown')
+                "session_id": self.session_id
             }
             
             json_log = json.dumps(log_entry, ensure_ascii=False, separators=(',', ':'))

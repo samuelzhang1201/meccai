@@ -8,7 +8,7 @@ from typing import List, Tuple
 import gradio as gr
 
 from meccaai.apps.lumos_bedrock_agents import LumosBedrockAgentSystem
-from meccaai.core.conversation_logger import get_conversation_logger
+from meccaai.core.loggers import ai_logger
 from meccaai.core.logging import get_logger
 from meccaai.core.types import Message
 
@@ -55,23 +55,26 @@ class GradioBedrockApp:
                 agent_choice, ("data_manager", "Data Manager")
             )
 
-            # Get the conversation logger to track tool calls
-            conv_logger = get_conversation_logger()
-
-            # Store reference to track tool calls for this conversation
-            initial_conversation_count = conv_logger.conversation_count
+            # Log the interaction start
+            ai_logger.log_system_event(
+                event_type="gradio_interaction_start",
+                message=f"Starting Gradio interaction with {selected_agent}",
+                data={"agent": selected_agent, "user_message": user_message}
+            )
 
             # Process the request
             result = await self.system.process_request(messages, agent=selected_agent)
 
-            # Capture tool calls from the conversation logger
-            if (
-                hasattr(conv_logger, "current_log_entry")
-                and conv_logger.current_log_entry
-            ):
-                self.current_tool_calls = conv_logger.current_log_entry.get(
-                    "tools_called", []
-                )
+            # Log the interaction result
+            ai_logger.log_ai_interaction(
+                user_prompt=user_message,
+                ai_response=result.content,
+                model_name=selected_agent,
+                metadata={"interface": "gradio", "agent": selected_agent}
+            )
+
+            # Reset tool calls tracking (placeholder for future enhancement)
+            self.current_tool_calls = []
 
             # Add assistant response to history with agent name
             agent_message = f"**{agent_display_name}:** {result.content}"

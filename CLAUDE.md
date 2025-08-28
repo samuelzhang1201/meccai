@@ -219,3 +219,4 @@ meccaai/
    - Follow existing patterns
    - Document public APIs
    - Test thoroughly
+   - After any changes, test by login to bedrock app, and ask an easy quesion, for exmaple: show me tableau users.

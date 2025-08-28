@@ -7,12 +7,7 @@ import boto3
 from botocore.exceptions import ClientError
 
 from meccaai.core.config import get_settings
-from meccaai.core.conversation_logger import (
-    log_ai_response,
-    log_conversation_error,
-    log_conversation_start,
-    log_tool_call,
-)
+from meccaai.core.loggers import ai_logger
 from meccaai.core.logging import get_logger
 from meccaai.core.tool_registry import get_registry
 from meccaai.core.types import Message, Tool, ToolResult
@@ -63,7 +58,16 @@ class BedrockRunner:
 
         # Log conversation start
         user_message = messages[-1].content if messages else ""
-        log_conversation_start(user_message, model_name, agent)
+        ai_logger.log_system_event(
+            event_type="bedrock_conversation_start",
+            message=f"Starting Bedrock conversation with {agent}",
+            data={
+                "user_message": user_message,
+                "model_name": model_name,
+                "agent": agent,
+                "available_tools": len(available_tools) if available_tools else 0
+            }
+        )
 
         try:
             # Prepare tool schema for Bedrock
@@ -154,15 +158,14 @@ class BedrockRunner:
                         response_body.get("content", [])
                     )
 
-                    # Log AI response
-                    log_ai_response(content)
+                    # Log AI response (will be captured by main system)
 
                     return Message(role="assistant", content=content)
 
             # If we hit max_turns, return what we have
             logger.warning(f"Hit maximum turns ({max_turns}) in conversation")
             final_content = "I've reached the maximum number of steps for this conversation. Please ask your question again for a fresh start."
-            log_ai_response(final_content)
+            # Log will be handled by main system
             return Message(role="assistant", content=final_content)
 
         except ClientError as e:
@@ -172,7 +175,12 @@ class BedrockRunner:
             logger.error(error_text)
 
             # Log conversation error
-            log_conversation_error(error_text)
+            ai_logger.log_system_event(
+                event_type="bedrock_conversation_error",
+                message="Bedrock API error occurred",
+                level="ERROR",
+                data={"error": error_text, "error_code": error_code}
+            )
 
             return Message(
                 role="assistant",
@@ -183,7 +191,12 @@ class BedrockRunner:
             logger.error(error_text)
 
             # Log conversation error
-            log_conversation_error(error_text)
+            ai_logger.log_system_event(
+                event_type="bedrock_conversation_error", 
+                message="Bedrock API error occurred",
+                level="ERROR",
+                data={"error": error_text}
+            )
 
             return Message(
                 role="assistant",
@@ -221,7 +234,14 @@ class BedrockRunner:
             result.id = tool_id
 
             # Log tool call and result
-            log_tool_call(tool_name, tool_input, result)
+            ai_logger.log_tool_execution(
+                tool_name=tool_name,
+                tool_input=tool_input,
+                tool_output=result.result,
+                execution_time_ms=0,  # Not tracked here
+                success=result.success,
+                error=result.error
+            )
 
             return result
 
